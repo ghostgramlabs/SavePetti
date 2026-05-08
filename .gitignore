@@ -17,6 +17,8 @@
 **/build/
 **/generated/
 local.properties
+.kotlin/
+**/.kotlin/
 
 ## IDE
 .idea/
