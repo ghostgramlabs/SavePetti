@@ -77,4 +77,17 @@ class CategoriesViewModel @Inject constructor(
         repo.deleteCategory(id)
         _selected.value = null
     }
+
+    fun updateSelectedCategory(name: String, emoji: String, colorHex: Long) = viewModelScope.launch {
+        val id = _selected.value ?: return@launch
+        val category = state.value.categories.firstOrNull { it.id == id } ?: return@launch
+        if (!category.userCreated || name.isBlank()) return@launch
+        repo.upsertCategory(
+            category.copy(
+                name = name.trim().take(28),
+                emoji = emoji,
+                colorHex = colorHex
+            )
+        )
+    }
 }

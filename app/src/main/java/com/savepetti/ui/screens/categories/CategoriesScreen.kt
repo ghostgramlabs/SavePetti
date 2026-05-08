@@ -1,6 +1,7 @@
 package com.savepetti.ui.screens.categories
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,11 +28,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,8 +54,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.savepetti.data.local.CategoryEntity
+import com.savepetti.ui.components.CollectionColorSeeds
+import com.savepetti.ui.components.CollectionEmojiSeeds
 import com.savepetti.ui.components.EmptyState
 import com.savepetti.ui.components.SaveCard
+import com.savepetti.ui.components.toLongHex
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +70,7 @@ fun CategoriesScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selected = state.categories.firstOrNull { it.id == state.selectedId }
     var showDeleteCategory by remember { mutableStateOf(false) }
+    var showEditCategory by remember { mutableStateOf(false) }
 
     if (showDeleteCategory && selected?.userCreated == true) {
         AlertDialog(
@@ -79,6 +87,17 @@ fun CategoriesScreen(
                 TextButton(onClick = { showDeleteCategory = false }) { Text("Cancel") }
             },
             shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    if (showEditCategory && selected?.userCreated == true) {
+        EditCollectionDialog(
+            category = selected,
+            onDismiss = { showEditCategory = false },
+            onSave = { name, emoji, colorHex ->
+                showEditCategory = false
+                viewModel.updateSelectedCategory(name, emoji, colorHex)
+            }
         )
     }
 
@@ -99,6 +118,12 @@ fun CategoriesScreen(
                 },
                 actions = {
                     if (selected?.userCreated == true) {
+                        IconButton(onClick = { showEditCategory = true }) {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = "Edit collection"
+                            )
+                        }
                         IconButton(onClick = { showDeleteCategory = true }) {
                             Icon(
                                 Icons.Rounded.Delete,
@@ -192,7 +217,7 @@ private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .height(168.dp)
+            .heightIn(min = 168.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(color.copy(alpha = 0.16f))
             .clickable(onClick = onClick)
@@ -219,4 +244,81 @@ private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun EditCollectionDialog(
+    category: CategoryEntity,
+    onDismiss: () -> Unit,
+    onSave: (String, String, Long) -> Unit
+) {
+    var name by remember(category.id) { mutableStateOf(category.name) }
+    var emoji by remember(category.id) { mutableStateOf(category.emoji) }
+    var color by remember(category.id) { mutableStateOf(Color(category.colorHex)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit collection") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(28) },
+                    placeholder = { Text("Collection name") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(16.dp))
+                Text("Emoji", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(CollectionEmojiSeeds) { e ->
+                        Box(
+                            Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (e == emoji) color.copy(alpha = 0.18f)
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                .clickable { emoji = e },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(e, style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Color", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(CollectionColorSeeds) { c ->
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(c)
+                                .border(
+                                    width = if (c == color) 3.dp else 0.dp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clickable { color = c }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onSave(name, emoji, color.toLongHex()) }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
 }

@@ -1,9 +1,12 @@
 package com.savepetti.ui.screens.home
 
-import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,21 +41,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.savepetti.data.local.CategoryEntity
 import com.savepetti.data.local.SaveItemEntity
-import com.savepetti.data.preferences.ThemeMode
 import com.savepetti.ui.components.CategoryChip
 import com.savepetti.ui.components.EmptyState
 import com.savepetti.ui.components.SaveCard
@@ -60,7 +60,6 @@ import com.savepetti.ui.components.SearchPill
 import com.savepetti.ui.components.SectionHeader
 import com.savepetti.ui.screens.save.IncomingShare
 import com.savepetti.ui.screens.save.SaveSheet
-import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -69,14 +68,10 @@ fun HomeScreen(
     onOpenSource: (String) -> Unit,
     onOpenCategory: (String) -> Unit,
     onOpenAllCategories: () -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showQuickNote by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val ctx = LocalContext.current
 
     if (showQuickNote) {
         SaveSheet(
@@ -100,7 +95,6 @@ fun HomeScreen(
         if (state.isLoading) {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 Greeting()
-                ThemeModeSelector(themeMode, onThemeModeChange)
                 Text(
                     "Loading your shelf...",
                     style = MaterialTheme.typography.bodyMedium,
@@ -114,7 +108,6 @@ fun HomeScreen(
         if (state.recent.isEmpty() && state.pinned.isEmpty() && state.favorites.isEmpty()) {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 Greeting()
-                ThemeModeSelector(themeMode, onThemeModeChange)
                 FirstRunGuide(
                     onAddNote = { showQuickNote = true },
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -147,21 +140,16 @@ fun HomeScreen(
             // Header - full-width span
             item(span = StaggeredGridItemSpan.FullLine) {
                 Column {
-                    Greeting(
-                        onExport = {
-                            scope.launch {
-                                runCatching { viewModel.exportBackupJson() }
-                                    .onSuccess { shareBackup(ctx, it) }
-                                    .onFailure { Toast.makeText(ctx, "Couldn't export backup", Toast.LENGTH_SHORT).show() }
-                            }
-                        }
-                    )
-                    ThemeModeSelector(themeMode, onThemeModeChange)
+                    Greeting()
                     Spacer(Modifier.height(4.dp))
                     SearchPill(
                         onClick = { onOpenSearch("") },
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
+                    if (state.isIndexingText) {
+                        Spacer(Modifier.height(10.dp))
+                        IndexingStatusChip(modifier = Modifier.padding(horizontal = 20.dp))
+                    }
                     Spacer(Modifier.height(20.dp))
                     if (state.categories.isNotEmpty()) {
                         SectionHeader(
@@ -217,6 +205,63 @@ fun HomeScreen(
                 CardForItem(item, state.categories, onOpenItem)
             }
         }
+    }
+}
+
+@Composable
+private fun IndexingStatusChip(modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val transition = rememberInfiniteTransition(label = "text-indexing")
+    val dotOne by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot-one"
+    )
+    val dotTwo by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, delayMillis = 160),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot-two"
+    )
+    val dotThree by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, delayMillis = 320),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot-three"
+    )
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(scheme.primary.copy(alpha = 0.11f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        listOf(dotOne, dotTwo, dotThree).forEach { alpha ->
+            Box(
+                Modifier
+                    .padding(end = 4.dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(scheme.primary.copy(alpha = alpha))
+            )
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(
+            "Indexing saved text",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            color = scheme.primary
+        )
     }
 }
 
@@ -315,7 +360,7 @@ private fun GuideStep(
 }
 
 @Composable
-private fun Greeting(onExport: (() -> Unit)? = null) {
+private fun Greeting() {
     Row(
         Modifier
             .fillMaxWidth()
@@ -334,68 +379,7 @@ private fun Greeting(onExport: (() -> Unit)? = null) {
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
-        if (onExport != null) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .clickable(onClick = onExport)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Rounded.Share,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "Export",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
     }
-}
-
-@Composable
-private fun ThemeModeSelector(
-    selected: ThemeMode,
-    onSelect: (ThemeMode) -> Unit
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 0.dp)
-    ) {
-        ThemeMode.entries.forEach { mode ->
-            val active = selected == mode
-            Text(
-                mode.label(),
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (active) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .clickable { onSelect(mode) }
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
-            )
-        }
-    }
-}
-
-private fun shareBackup(ctx: android.content.Context, json: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "application/json"
-        putExtra(Intent.EXTRA_SUBJECT, "SavePetti backup")
-        putExtra(Intent.EXTRA_TEXT, json)
-    }
-    runCatching { ctx.startActivity(Intent.createChooser(intent, "Export SavePetti backup")) }
-        .onFailure { Toast.makeText(ctx, "Couldn't export backup", Toast.LENGTH_SHORT).show() }
 }
 
 @Composable

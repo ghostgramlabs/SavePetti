@@ -7,6 +7,7 @@ import com.savepetti.data.local.AttachmentEntity
 import com.savepetti.data.local.CategoryEntity
 import com.savepetti.data.local.SaveItemEntity
 import com.savepetti.data.local.TagEntity
+import com.savepetti.data.preferences.OcrPreferences
 import com.savepetti.data.repository.SaveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,12 +22,14 @@ data class DetailState(
     val category: CategoryEntity? = null,
     val categories: List<CategoryEntity> = emptyList(),
     val attachments: List<AttachmentEntity> = emptyList(),
-    val tags: List<TagEntity> = emptyList()
+    val tags: List<TagEntity> = emptyList(),
+    val ocrAutoScanEnabled: Boolean = true
 )
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repo: SaveRepository,
+    private val ocrPreferences: OcrPreferences,
     handle: SavedStateHandle
 ) : ViewModel() {
 
@@ -36,14 +39,16 @@ class DetailViewModel @Inject constructor(
         repo.observeById(itemId),
         repo.observeCategories(),
         repo.observeAttachments(itemId),
-        repo.observeTagsForItem(itemId)
-    ) { item, cats, atts, tags ->
+        repo.observeTagsForItem(itemId),
+        ocrPreferences.autoScan
+    ) { item, cats, atts, tags, ocrEnabled ->
         DetailState(
             item = item,
             category = item?.categoryId?.let { cid -> cats.firstOrNull { it.id == cid } },
             categories = cats,
             attachments = atts,
-            tags = tags
+            tags = tags,
+            ocrAutoScanEnabled = ocrEnabled
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailState())
 

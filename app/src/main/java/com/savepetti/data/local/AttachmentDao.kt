@@ -27,6 +27,27 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachments ORDER BY item_id ASC, sort_order ASC")
     suspend fun allForExport(): List<AttachmentEntity>
 
+    @Query(
+        """
+        SELECT * FROM attachments
+        WHERE kind = 'IMAGE'
+            AND (ocr_text IS NULL OR ocr_text = '')
+        ORDER BY created_at DESC
+        """
+    )
+    suspend fun imageAttachmentsNeedingOcr(): List<AttachmentEntity>
+
+    @Query(
+        """
+        SELECT a.* FROM attachments a
+        JOIN save_items s ON s.id = a.item_id
+        WHERE a.kind = 'PDF'
+            AND (s.ocr_text IS NULL OR s.ocr_text = '')
+        ORDER BY a.created_at DESC
+        """
+    )
+    suspend fun pdfAttachmentsNeedingOcr(): List<AttachmentEntity>
+
     /**
      * Returns the URIs of attachments belonging to an item — used pre-delete
      * so the repository can clean up the underlying files in filesDir/ once

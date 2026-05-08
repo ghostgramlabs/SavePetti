@@ -37,6 +37,32 @@ interface SaveDao {
     @Query("SELECT * FROM save_items ORDER BY created_at DESC")
     suspend fun allForExport(): List<SaveItemEntity>
 
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE content_type = 'IMAGE'
+            AND local_uri IS NOT NULL
+            AND (ocr_text IS NULL OR ocr_text = '')
+            AND NOT EXISTS (
+                SELECT 1 FROM attachments
+                WHERE attachments.item_id = save_items.id
+            )
+        ORDER BY created_at DESC
+        """
+    )
+    suspend fun imageItemsNeedingOcr(): List<SaveItemEntity>
+
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE content_type = 'PDF'
+            AND local_uri IS NOT NULL
+            AND (ocr_text IS NULL OR ocr_text = '')
+        ORDER BY created_at DESC
+        """
+    )
+    suspend fun pdfItemsNeedingOcr(): List<SaveItemEntity>
+
     // ── Hot, capped browses (Home) ───────────────────────────────────────
 
     @Query("SELECT * FROM save_items ORDER BY created_at DESC LIMIT :limit")

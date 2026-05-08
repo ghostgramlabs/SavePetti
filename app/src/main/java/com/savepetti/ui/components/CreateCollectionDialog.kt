@@ -44,11 +44,15 @@ import com.savepetti.ui.theme.RecipeOrange
 import com.savepetti.ui.theme.StyleAmber
 import com.savepetti.ui.theme.TravelTeal
 
-private val EmojiSeeds = listOf(
-    "📦","🛍","🍳","✈️","💪","👗","🏡","💄","📖","💰","🎵",
-    "💡","🎬","💼","❤️","📚","⭐","🎨","🐾","🌱","🧠","☕","📷","🎮","🧘"
+val CollectionEmojiSeeds = listOf(
+    "\uD83D\uDCE6", "\uD83D\uDED2", "\uD83C\uDF73", "\u2708\uFE0F", "\uD83D\uDCAA",
+    "\uD83D\uDC57", "\uD83C\uDFE1", "\uD83D\uDC84", "\uD83D\uDCD6", "\uD83D\uDCB0",
+    "\uD83C\uDFB5", "\uD83D\uDCA1", "\uD83C\uDFAC", "\uD83D\uDCBC", "\u2764\uFE0F",
+    "\uD83D\uDCDA", "\u2B50", "\uD83C\uDFA8", "\uD83D\uDC3E", "\uD83C\uDF31",
+    "\uD83E\uDDE0", "\u2615", "\uD83D\uDCF7", "\uD83C\uDFAE", "\uD83E\uDDD8"
 )
-private val ColorSeeds = listOf(
+
+val CollectionColorSeeds = listOf(
     RecipeOrange, TravelTeal, FitnessIndigo, StyleAmber, HomePurple,
     BeautyPink, ReadLaterSky, FinanceEmerald, MusicCoral
 )
@@ -61,8 +65,8 @@ fun CreateCollectionDialog(
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var emoji by remember { mutableStateOf(EmojiSeeds.first()) }
-    var color by remember { mutableStateOf(ColorSeeds.first()) }
+    var emoji by remember { mutableStateOf(CollectionEmojiSeeds.first()) }
+    var color by remember { mutableStateOf(CollectionColorSeeds.first()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -91,7 +95,7 @@ fun CreateCollectionDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(EmojiSeeds) { e ->
+                    items(CollectionEmojiSeeds) { e ->
                         val selected = e == emoji
                         Box(
                             Modifier
@@ -120,7 +124,7 @@ fun CreateCollectionDialog(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(ColorSeeds) { c ->
+                    items(CollectionColorSeeds) { c ->
                         val selected = c == color
                         Box(
                             Modifier
@@ -142,11 +146,13 @@ fun CreateCollectionDialog(
             Button(
                 enabled = name.isNotBlank(),
                 onClick = {
-                    onCreate(NewCollection(
-                        name = name.trim(),
-                        emoji = emoji,
-                        colorHex = color.toLongHex()
-                    ))
+                    onCreate(
+                        NewCollection(
+                            name = name.trim(),
+                            emoji = emoji,
+                            colorHex = color.toLongHex()
+                        )
+                    )
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = color,
@@ -161,7 +167,7 @@ fun CreateCollectionDialog(
     )
 }
 
-private fun Color.toLongHex(): Long {
+fun Color.toLongHex(): Long {
     val a = (alpha * 255).toInt() and 0xFF
     val r = (red * 255).toInt() and 0xFF
     val g = (green * 255).toInt() and 0xFF

@@ -69,6 +69,7 @@ class OcrWorker @AssistedInject constructor(
 
         fun enqueueForItem(ctx: Context, itemId: Long, uri: String) {
             val req = OneTimeWorkRequestBuilder<OcrWorker>()
+                .addTag(OcrWorkTags.TEXT_INDEXING)
                 .setInputData(workDataOf(KEY_ITEM_ID to itemId, KEY_URI to uri))
                 .build()
             WorkManager.getInstance(ctx).enqueue(req)
@@ -76,6 +77,7 @@ class OcrWorker @AssistedInject constructor(
 
         fun enqueueForAttachment(ctx: Context, itemId: Long, attachmentId: Long, uri: String) {
             val req = OneTimeWorkRequestBuilder<OcrWorker>()
+                .addTag(OcrWorkTags.TEXT_INDEXING)
                 .setInputData(
                     workDataOf(
                         KEY_ITEM_ID to itemId,

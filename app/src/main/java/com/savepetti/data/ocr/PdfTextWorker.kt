@@ -88,6 +88,7 @@ class PdfTextWorker @AssistedInject constructor(
 
         fun enqueue(ctx: Context, itemId: Long, uri: String) {
             val req = OneTimeWorkRequestBuilder<PdfTextWorker>()
+                .addTag(OcrWorkTags.TEXT_INDEXING)
                 .setInputData(workDataOf(KEY_ITEM_ID to itemId, KEY_URI to uri))
                 .build()
             WorkManager.getInstance(ctx).enqueue(req)

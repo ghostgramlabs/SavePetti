@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,12 +32,14 @@ import com.savepetti.ui.screens.categories.CategoriesScreen
 import com.savepetti.ui.screens.detail.DetailScreen
 import com.savepetti.ui.screens.home.HomeScreen
 import com.savepetti.ui.screens.search.SearchScreen
+import com.savepetti.ui.screens.settings.SettingsScreen
 
 object Routes {
     const val Home = "home"
     const val Search = "search?q={q}&src={src}"
     const val Detail = "detail/{id}"
     const val Categories = "categories?cid={cid}"
+    const val Settings = "settings"
 
     fun search(q: String = "", src: String = "") =
         "search?q=${Uri.encode(q)}&src=${Uri.encode(src)}"
@@ -54,7 +57,8 @@ private data class TopTab(
 private val topTabs = listOf(
     TopTab(Routes.Home, "home", "Home", Icons.Rounded.Home),
     TopTab(Routes.search(), "search", "Search", Icons.Rounded.Search),
-    TopTab(Routes.categories(), "categories", "Browse", Icons.Rounded.GridView)
+    TopTab(Routes.categories(), "categories", "Browse", Icons.Rounded.GridView),
+    TopTab(Routes.Settings, "settings", "Settings", Icons.Rounded.Settings)
 )
 
 @Composable
@@ -84,7 +88,11 @@ fun SavePettiNavGraph(
                     onOpenSearch = { q -> nav.navigateTopLevel(Routes.search(q)) },
                     onOpenSource = { src -> nav.navigate(Routes.search(src = src)) },
                     onOpenCategory = { cid -> nav.navigate(Routes.categories(cid)) },
-                    onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) },
+                    onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) }
+                )
+            }
+            composable(Routes.Settings) {
+                SettingsScreen(
                     themeMode = themeMode,
                     onThemeModeChange = onThemeModeChange
                 )

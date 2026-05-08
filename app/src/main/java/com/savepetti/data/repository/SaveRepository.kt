@@ -94,6 +94,9 @@ class SaveRepository @Inject constructor(
     suspend fun touchOpened(id: Long) = saveDao.touchOpened(id)
     suspend fun setOcrText(id: Long, text: String) = saveDao.setOcrText(id, text)
 
+    suspend fun imageItemsNeedingOcr(): List<SaveItemEntity> = saveDao.imageItemsNeedingOcr()
+    suspend fun pdfItemsNeedingOcr(): List<SaveItemEntity> = saveDao.pdfItemsNeedingOcr()
+
     suspend fun search(rawQuery: String): List<SaveItemEntity> {
         val q = sanitizeFtsQuery(rawQuery)
         if (q.isBlank()) return emptyList()
@@ -177,6 +180,10 @@ class SaveRepository @Inject constructor(
 
     fun observeAttachments(itemId: Long) = attachmentDao.observeForItem(itemId)
     suspend fun attachmentsFor(itemId: Long) = attachmentDao.forItem(itemId)
+    suspend fun imageAttachmentsNeedingOcr(): List<AttachmentEntity> =
+        attachmentDao.imageAttachmentsNeedingOcr()
+    suspend fun pdfAttachmentsNeedingOcr(): List<AttachmentEntity> =
+        attachmentDao.pdfAttachmentsNeedingOcr()
     suspend fun setAttachmentOcr(id: Long, text: String) = attachmentDao.setOcrText(id, text)
     suspend fun deleteAttachment(id: Long) {
         val attachment = attachmentDao.getById(id) ?: return

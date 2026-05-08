@@ -1,15 +1,27 @@
 package com.savepetti.ui.screens.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.savepetti.data.local.CategoryEntity
 import com.savepetti.data.local.SaveItemEntity
+import com.savepetti.data.ocr.OcrWorkTags
 import com.savepetti.data.repository.SaveRepository
 import com.savepetti.domain.model.SourceApp
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,13 +35,16 @@ data class HomeState(
     val favorites: List<SaveItemEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
     val sources: List<SourceCount> = emptyList(),
-    val totalCount: Int = 0
+    val totalCount: Int = 0,
+    val isIndexingText: Boolean = false
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val repo: SaveRepository
+    private val repo: SaveRepository,
+    @ApplicationContext appContext: Context
 ) : ViewModel() {
+    private val isTextIndexing = textIndexingFlow(appContext)
 
     /**
      * Each component flow is bounded — recent/pinned/favorites are LIMITed in
@@ -42,7 +57,8 @@ class HomeViewModel @Inject constructor(
         repo.observeFavorites(),
         repo.observeCategories(),
         repo.observeSourceCounts(),
-        repo.observeTotal()
+        repo.observeTotal(),
+        isTextIndexing
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val recent = args[0] as List<SaveItemEntity>
@@ -51,6 +67,7 @@ class HomeViewModel @Inject constructor(
         val cats = args[3] as List<CategoryEntity>
         val rawCounts = args[4] as List<com.savepetti.data.local.SourceCount>
         val total = args[5] as Int
+        val indexing = args[6] as Boolean
 
         val sources = rawCounts.mapNotNull { sc ->
             val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
@@ -64,7 +81,8 @@ class HomeViewModel @Inject constructor(
             favorites = favs,
             categories = cats,
             sources = sources,
-            totalCount = total
+            totalCount = total,
+            isIndexingText = indexing
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
@@ -74,3 +92,18 @@ class HomeViewModel @Inject constructor(
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 }
+
+private fun textIndexingFlow(context: Context): Flow<Boolean> = flow {
+    val workManager = WorkManager.getInstance(context)
+    while (true) {
+        val infos = workManager.getWorkInfosByTag(OcrWorkTags.TEXT_INDEXING).get()
+        emit(
+            infos.any {
+                it.state == WorkInfo.State.ENQUEUED ||
+                    it.state == WorkInfo.State.RUNNING ||
+                    it.state == WorkInfo.State.BLOCKED
+            }
+        )
+        delay(1_250)
+    }
+}.distinctUntilChanged().flowOn(Dispatchers.IO)

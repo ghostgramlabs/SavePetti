@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,10 +45,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +82,7 @@ import com.savepetti.data.util.TimeFormat
 import com.savepetti.domain.model.ContentType
 import com.savepetti.domain.model.SourceApp
 import com.savepetti.ui.components.CategoryChip
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -222,8 +227,9 @@ fun DetailScreen(
                     },
                     onDelete = { galleryItem ->
                         val id = galleryItem.attachmentId ?: return@AttachmentViewerDialog
-                        viewModel.deleteAttachment(id)
-                        scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                        requestAttachmentDelete(snackbarHostState, scope) {
+                            viewModel.deleteAttachment(id)
+                        }
                     }
                 )
             }
@@ -246,8 +252,9 @@ fun DetailScreen(
                             },
                             onDelete = {
                                 val id = galleryItem.attachmentId ?: return@AttachmentPreview
-                                viewModel.deleteAttachment(id)
-                                scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                                requestAttachmentDelete(snackbarHostState, scope) {
+                                    viewModel.deleteAttachment(id)
+                                }
                             },
                             modifier = Modifier
                                 .fillParentMaxWidth(0.85f)
@@ -268,8 +275,9 @@ fun DetailScreen(
                     },
                     onDelete = {
                         val id = gallery.first().attachmentId ?: return@AttachmentPreview
-                        viewModel.deleteAttachment(id)
-                        scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                        requestAttachmentDelete(snackbarHostState, scope) {
+                            viewModel.deleteAttachment(id)
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -376,7 +384,7 @@ fun DetailScreen(
                 if (!item.ocrText.isNullOrBlank()) {
                     Spacer(Modifier.height(24.dp))
                     OcrTextSection(text = item.ocrText)
-                } else if (isIndexingText(item.contentType, state.attachments)) {
+                } else if (state.ocrAutoScanEnabled && isIndexingText(item.contentType, state.attachments)) {
                     Spacer(Modifier.height(24.dp))
                     IndexingTextSection()
                 }
@@ -407,7 +415,17 @@ private fun AttachmentViewerDialog(
     onShare: (GalleryItem) -> Unit,
     onDelete: (GalleryItem) -> Unit
 ) {
-    val current = items[index]
+    val pagerState = rememberPagerState(
+        initialPage = index.coerceIn(items.indices),
+        pageCount = { items.size }
+    )
+    val scope = rememberCoroutineScope()
+    val current = items[pagerState.currentPage.coerceIn(items.indices)]
+
+    LaunchedEffect(pagerState.currentPage) {
+        onSelect(pagerState.currentPage)
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -417,14 +435,19 @@ private fun AttachmentViewerDialog(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            AsyncImage(
-                model = current.uri,
-                contentDescription = title,
-                contentScale = ContentScale.Fit,
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp)
-            )
+            ) { page ->
+                AsyncImage(
+                    model = items[page].uri,
+                    contentDescription = "$title, item ${page + 1} of ${items.size}",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -437,7 +460,7 @@ private fun AttachmentViewerDialog(
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Close")
                 }
                 Text(
-                    "${index + 1} of ${items.size}",
+                    "${pagerState.currentPage + 1} of ${items.size}",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
@@ -448,8 +471,6 @@ private fun AttachmentViewerDialog(
                 if (current.attachmentId != null) {
                     IconButton(onClick = {
                         onDelete(current)
-                        if (items.size <= 1) onDismiss()
-                        else onSelect(index.coerceAtMost(items.lastIndex - 1))
                     }) {
                         Icon(Icons.Rounded.Delete, contentDescription = "Delete this item", tint = MaterialTheme.colorScheme.error)
                     }
@@ -463,14 +484,36 @@ private fun AttachmentViewerDialog(
                     .padding(16.dp)
             ) {
                 TextButton(
-                    enabled = index > 0,
-                    onClick = { onSelect(index - 1) }
+                    enabled = pagerState.currentPage > 0,
+                    onClick = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    }
                 ) { Text("Previous") }
                 TextButton(
-                    enabled = index < items.lastIndex,
-                    onClick = { onSelect(index + 1) }
+                    enabled = pagerState.currentPage < items.lastIndex,
+                    onClick = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    }
                 ) { Text("Next") }
             }
+        }
+    }
+}
+
+private fun requestAttachmentDelete(
+    snackbarHostState: SnackbarHostState,
+    scope: CoroutineScope,
+    onDelete: () -> Unit
+) {
+    scope.launch {
+        val result = snackbarHostState.showSnackbar(
+            message = "Item will be removed",
+            actionLabel = "Undo",
+            withDismissAction = true
+        )
+        if (result != SnackbarResult.ActionPerformed) {
+            onDelete()
+            snackbarHostState.showSnackbar("Item removed")
         }
     }
 }

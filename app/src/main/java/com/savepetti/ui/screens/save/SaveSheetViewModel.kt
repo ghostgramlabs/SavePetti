@@ -10,6 +10,7 @@ import com.savepetti.data.local.SaveItemEntity
 import com.savepetti.data.metadata.MetadataFetcher
 import com.savepetti.data.ocr.OcrWorker
 import com.savepetti.data.ocr.PdfTextWorker
+import com.savepetti.data.preferences.OcrPreferences
 import com.savepetti.data.repository.SaveRepository
 import com.savepetti.data.util.AttachmentStore
 import com.savepetti.data.util.TextUtils
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -54,6 +56,7 @@ class SaveSheetViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val metadata: MetadataFetcher,
     private val attachmentStore: AttachmentStore,
+    private val ocrPreferences: OcrPreferences,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -179,17 +182,19 @@ class SaveSheetViewModel @Inject constructor(
         }
         val attachmentIds = repo.insertAttachments(attachmentRows)
 
-        if (s.contentType == ContentType.IMAGE) {
-            if (attachmentRows.isEmpty() && !ownLocalUri.isNullOrBlank()) {
-                OcrWorker.enqueueForItem(appContext, id, ownLocalUri)
-            } else {
-                attachmentRows.zip(attachmentIds).forEach { (row, attId) ->
-                    OcrWorker.enqueueForAttachment(appContext, id, attId, row.uri)
+        if (ocrPreferences.autoScan.first()) {
+            if (s.contentType == ContentType.IMAGE) {
+                if (attachmentRows.isEmpty() && !ownLocalUri.isNullOrBlank()) {
+                    OcrWorker.enqueueForItem(appContext, id, ownLocalUri)
+                } else {
+                    attachmentRows.zip(attachmentIds).forEach { (row, attId) ->
+                        OcrWorker.enqueueForAttachment(appContext, id, attId, row.uri)
+                    }
                 }
             }
-        }
-        if (s.contentType == ContentType.PDF && !ownLocalUri.isNullOrBlank()) {
-            PdfTextWorker.enqueue(appContext, id, ownLocalUri)
+            if (s.contentType == ContentType.PDF && !ownLocalUri.isNullOrBlank()) {
+                PdfTextWorker.enqueue(appContext, id, ownLocalUri)
+            }
         }
 
         _state.value = s.copy(isSaved = true)
@@ -241,9 +246,16 @@ class SaveSheetViewModel @Inject constructor(
             repo.update(target.copy(notes = mergedNotes, updatedAt = System.currentTimeMillis()))
         }
 
-        if (s.contentType == ContentType.IMAGE) {
-            rows.zip(attIds).forEach { (row, id) ->
-                OcrWorker.enqueueForAttachment(appContext, target.id, id, row.uri)
+        if (ocrPreferences.autoScan.first()) {
+            if (s.contentType == ContentType.IMAGE) {
+                rows.zip(attIds).forEach { (row, id) ->
+                    OcrWorker.enqueueForAttachment(appContext, target.id, id, row.uri)
+                }
+            }
+            if (s.contentType == ContentType.PDF) {
+                rows.forEach { row ->
+                    PdfTextWorker.enqueue(appContext, target.id, row.uri)
+                }
             }
         }
 
