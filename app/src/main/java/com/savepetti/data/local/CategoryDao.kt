@@ -25,6 +25,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")
     fun observeAll(): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")
+    suspend fun allForExport(): List<CategoryEntity>
+
     @Query("SELECT * FROM categories WHERE parent_id = :parentId ORDER BY sort_order ASC, name ASC")
     fun observeChildrenOf(parentId: String): Flow<List<CategoryEntity>>
 

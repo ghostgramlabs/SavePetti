@@ -1,5 +1,7 @@
 package com.savepetti.ui.screens.detail
 
+import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -23,15 +25,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +41,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -48,6 +52,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,15 +67,19 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import coil.compose.AsyncImage
+import com.savepetti.data.local.AttachmentEntity
 import com.savepetti.data.util.TimeFormat
+import com.savepetti.domain.model.ContentType
 import com.savepetti.domain.model.SourceApp
 import com.savepetti.ui.components.CategoryChip
 import kotlinx.coroutines.launch
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,8 +92,10 @@ fun DetailScreen(
     val item = state.item
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var viewerIndex by remember { mutableStateOf<Int?>(null) }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -93,7 +105,16 @@ fun DetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
-                    viewModel.delete().invokeOnCompletion { onDeleted() }
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Save will be deleted",
+                            actionLabel = "Undo",
+                            withDismissAction = true
+                        )
+                        if (result != androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            viewModel.delete().invokeOnCompletion { onDeleted() }
+                        }
+                    }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -105,12 +126,13 @@ fun DetailScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -140,7 +162,11 @@ fun DetailScreen(
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, it.url ?: it.title)
                             }
-                            ctx.startActivity(Intent.createChooser(intent, "Share"))
+                            runCatching {
+                                ctx.startActivity(Intent.createChooser(intent, "Share"))
+                            }.onFailure {
+                                scope.launch { snackbarHostState.showSnackbar("Couldn't share this save") }
+                            }
                         }
                     }) { Icon(Icons.Rounded.Share, contentDescription = "Share") }
                     IconButton(onClick = { showDeleteConfirm = true }) {
@@ -159,7 +185,7 @@ fun DetailScreen(
     ) { padding ->
         if (item == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Loading...", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Scaffold
         }
@@ -172,40 +198,83 @@ fun DetailScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            // Big preview — horizontal scroll if there are multiple attachments,
+            // Big preview: horizontal scroll if there are multiple attachments,
             // single hero otherwise.
-            val gallery: List<String> = state.attachments.map { it.uri }
-                .ifEmpty { listOfNotNull(item.thumbnailUri ?: item.localUri) }
+            val gallery: List<GalleryItem> = state.attachments.map { it.toGalleryItem() }
+                .ifEmpty {
+                    listOfNotNull(item.thumbnailUri ?: item.localUri).map {
+                        GalleryItem(uri = it, kind = item.contentType)
+                    }
+                }
+            viewerIndex = viewerIndex?.takeIf { it in gallery.indices }
+            viewerIndex?.let { index ->
+                AttachmentViewerDialog(
+                    items = gallery,
+                    index = index,
+                    title = item.title,
+                    accent = accent,
+                    onSelect = { viewerIndex = it },
+                    onDismiss = { viewerIndex = null },
+                    onShare = { galleryItem ->
+                        if (!shareGalleryItem(ctx, galleryItem, item.title)) {
+                            scope.launch { snackbarHostState.showSnackbar("Couldn't share this item") }
+                        }
+                    },
+                    onDelete = { galleryItem ->
+                        val id = galleryItem.attachmentId ?: return@AttachmentViewerDialog
+                        viewModel.deleteAttachment(id)
+                        scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                    }
+                )
+            }
 
             if (gallery.size > 1) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(gallery, key = { it }) { uri ->
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
+                    items(gallery, key = { it.uri }) { galleryItem ->
+                        AttachmentPreview(
+                            galleryItem = galleryItem,
+                            accent = accent,
+                            title = item.title,
+                            onOpen = { viewerIndex = gallery.indexOf(galleryItem) },
+                            onShare = {
+                                if (!shareGalleryItem(ctx, galleryItem, item.title)) {
+                                    scope.launch { snackbarHostState.showSnackbar("Couldn't share this item") }
+                                }
+                            },
+                            onDelete = {
+                                val id = galleryItem.attachmentId ?: return@AttachmentPreview
+                                viewModel.deleteAttachment(id)
+                                scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                            },
                             modifier = Modifier
-                                .fillMaxWidth(0.85f)
+                                .fillParentMaxWidth(0.85f)
                                 .heightIn(min = 280.dp, max = 380.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(accent.copy(alpha = 0.12f))
                         )
                     }
                 }
             } else if (gallery.isNotEmpty()) {
-                AsyncImage(
-                    model = gallery.first(),
-                    contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
+                AttachmentPreview(
+                    galleryItem = gallery.first(),
+                    accent = accent,
+                    title = item.title,
+                    onOpen = { viewerIndex = 0 },
+                    onShare = {
+                        if (!shareGalleryItem(ctx, gallery.first(), item.title)) {
+                            scope.launch { snackbarHostState.showSnackbar("Couldn't share this item") }
+                        }
+                    },
+                    onDelete = {
+                        val id = gallery.first().attachmentId ?: return@AttachmentPreview
+                        viewModel.deleteAttachment(id)
+                        scope.launch { snackbarHostState.showSnackbar("Item removed") }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 220.dp)
                         .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(accent.copy(alpha = 0.12f))
                 )
             } else {
                 Box(
@@ -224,13 +293,12 @@ fun DetailScreen(
             if (gallery.size > 1) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${gallery.size} items · swipe →",
+                    "${gallery.size} items - swipe, or share one",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 24.dp)
                 )
             }
-
             Spacer(Modifier.height(16.dp))
 
             Column(Modifier.padding(horizontal = 24.dp)) {
@@ -240,7 +308,7 @@ fun DetailScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "${source.emoji} ${source.displayName} · saved ${TimeFormat.relative(item.createdAt)}",
+                    "${source.emoji} ${source.displayName} - saved ${TimeFormat.relative(item.createdAt)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -255,11 +323,14 @@ fun DetailScreen(
                             .clickable {
                                 val i = Intent(Intent.ACTION_VIEW, item.url.toUri())
                                 runCatching { ctx.startActivity(i) }
+                                    .onFailure {
+                                        scope.launch { snackbarHostState.showSnackbar("Couldn't open original") }
+                                    }
                             }
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
                         Icon(
-                            Icons.Rounded.OpenInNew, null, tint = accent,
+                            Icons.AutoMirrored.Rounded.OpenInNew, null, tint = accent,
                             modifier = Modifier.padding(end = 8.dp)
                         )
                         Text(
@@ -305,11 +376,214 @@ fun DetailScreen(
                 if (!item.ocrText.isNullOrBlank()) {
                     Spacer(Modifier.height(24.dp))
                     OcrTextSection(text = item.ocrText)
+                } else if (isIndexingText(item.contentType, state.attachments)) {
+                    Spacer(Modifier.height(24.dp))
+                    IndexingTextSection()
                 }
 
                 Spacer(Modifier.height(48.dp))
             }
         }
+    }
+}
+
+private data class GalleryItem(
+    val uri: String,
+    val kind: String,
+    val attachmentId: Long? = null
+)
+
+private fun AttachmentEntity.toGalleryItem(): GalleryItem =
+    GalleryItem(uri = uri, kind = kind, attachmentId = id)
+
+@Composable
+private fun AttachmentViewerDialog(
+    items: List<GalleryItem>,
+    index: Int,
+    title: String,
+    accent: Color,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onShare: (GalleryItem) -> Unit,
+    onDelete: (GalleryItem) -> Unit
+) {
+    val current = items[index]
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            AsyncImage(
+                model = current.uri,
+                contentDescription = title,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Close")
+                }
+                Text(
+                    "${index + 1} of ${items.size}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { onShare(current) }) {
+                    Icon(Icons.Rounded.Share, contentDescription = "Share this item", tint = accent)
+                }
+                if (current.attachmentId != null) {
+                    IconButton(onClick = {
+                        onDelete(current)
+                        if (items.size <= 1) onDismiss()
+                        else onSelect(index.coerceAtMost(items.lastIndex - 1))
+                    }) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Delete this item", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                TextButton(
+                    enabled = index > 0,
+                    onClick = { onSelect(index - 1) }
+                ) { Text("Previous") }
+                TextButton(
+                    enabled = index < items.lastIndex,
+                    onClick = { onSelect(index + 1) }
+                ) { Text("Next") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentPreview(
+    galleryItem: GalleryItem,
+    accent: Color,
+    title: String,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(accent.copy(alpha = 0.12f))
+    ) {
+        AsyncImage(
+            model = galleryItem.uri,
+            contentDescription = title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(onClick = onOpen)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+        ) {
+            IconButton(
+                onClick = onShare,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(scheme.surface.copy(alpha = 0.92f))
+                    .size(40.dp)
+            ) {
+                Icon(Icons.Rounded.Share, contentDescription = "Share this item", tint = scheme.primary)
+            }
+            if (galleryItem.attachmentId != null) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(scheme.surface.copy(alpha = 0.92f))
+                        .size(40.dp)
+                ) {
+                    Icon(Icons.Rounded.Delete, contentDescription = "Delete this item", tint = scheme.error)
+                }
+            }
+        }
+    }
+}
+
+private fun shareGalleryItem(ctx: Context, item: GalleryItem, title: String): Boolean {
+    val source = Uri.parse(item.uri)
+    val shareUri = when (source.scheme) {
+        "file" -> {
+            val file = File(source.path ?: return false)
+            FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
+        }
+        else -> source
+    }
+    val mime = mimeForKind(item.kind)
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = mime
+        putExtra(Intent.EXTRA_STREAM, shareUri)
+        putExtra(Intent.EXTRA_SUBJECT, title)
+        clipData = ClipData.newUri(ctx.contentResolver, title, shareUri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    return runCatching { ctx.startActivity(Intent.createChooser(intent, "Share this item")) }.isSuccess
+}
+
+private fun mimeForKind(kind: String): String = when (
+    runCatching { ContentType.valueOf(kind) }.getOrDefault(ContentType.FILE)
+) {
+    ContentType.IMAGE -> "image/*"
+    ContentType.PDF -> "application/pdf"
+    ContentType.TEXT, ContentType.NOTE -> "text/plain"
+    ContentType.LINK -> "text/plain"
+    ContentType.FILE -> "*/*"
+}
+
+private fun isIndexingText(kind: String, attachments: List<AttachmentEntity>): Boolean {
+    val type = runCatching { ContentType.valueOf(kind) }.getOrDefault(ContentType.FILE)
+    return when (type) {
+        ContentType.IMAGE, ContentType.PDF -> true
+        else -> attachments.any {
+            val attachmentType = runCatching { ContentType.valueOf(it.kind) }.getOrDefault(ContentType.FILE)
+            (attachmentType == ContentType.IMAGE || attachmentType == ContentType.PDF) && it.ocrText.isNullOrBlank()
+        }
+    }
+}
+
+@Composable
+private fun IndexingTextSection() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(16.dp)
+    ) {
+        Text(
+            "Indexing text from this save. Search will improve when OCR finishes.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -346,7 +620,7 @@ private fun OcrTextSection(text: String) {
 /**
  * Big-headline title that's tap-to-edit. We use [androidx.compose.foundation.text.BasicTextField]
  * (no Material container) so the visual matches the original [Text] until the
- * user focuses it. Saves on focus loss — avoids spamming the DB on every keystroke.
+ * user focuses it. Saves on focus loss - avoids spamming the DB on every keystroke.
  *
  * A pencil icon hints at editability; a hairline underline appears on focus
  * so the user has visual confirmation they're typing.
@@ -426,7 +700,7 @@ private fun TagsRow(
                     ) {
                         Text("#$tag", style = MaterialTheme.typography.labelLarge, color = accent)
                         Spacer(Modifier.width(4.dp))
-                        Text("✕", style = MaterialTheme.typography.labelSmall, color = accent)
+                        Text("x", style = MaterialTheme.typography.labelSmall, color = accent)
                     }
                 }
             }
@@ -464,7 +738,7 @@ private fun NotesEditor(initial: String, onSave: (String) -> Unit) {
                 text = it
                 onSave(it)
             },
-            placeholder = { Text("Add a thought, a reminder, why you saved this…") },
+            placeholder = { Text("Add a thought, a reminder, why you saved this...") },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 100.dp),

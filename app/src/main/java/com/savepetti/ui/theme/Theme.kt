@@ -1,4 +1,4 @@
-package com.savepetti.ui.theme
+﻿package com.savepetti.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -10,6 +10,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.savepetti.data.preferences.ThemeMode
 
 private val LightColors = lightColorScheme(
     primary = Coral,
@@ -60,11 +61,16 @@ private val DarkColors = darkColorScheme(
 
 @Composable
 fun SavePettiTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit
 ) {
-    // Deliberately NOT using dynamicColor — we want our hand-picked palette,
+    // Deliberately NOT using dynamicColor - we want our hand-picked palette,
     // not the device-wallpaper-derived Material You scheme.
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
     val colors = if (darkTheme) DarkColors else LightColors
 
     val view = LocalView.current
@@ -87,4 +93,3 @@ fun SavePettiTheme(
         content = content
     )
 }
-

@@ -23,18 +23,24 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +62,25 @@ fun CategoriesScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selected = state.categories.firstOrNull { it.id == state.selectedId }
+    var showDeleteCategory by remember { mutableStateOf(false) }
+
+    if (showDeleteCategory && selected?.userCreated == true) {
+        AlertDialog(
+            onDismissRequest = { showDeleteCategory = false },
+            title = { Text("Delete ${selected.name}?") },
+            text = { Text("Saves in this collection will stay in SavePetti, but the collection will be removed.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteCategory = false
+                    viewModel.deleteSelectedCategory()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteCategory = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -70,7 +95,18 @@ fun CategoriesScreen(
                 navigationIcon = {
                     IconButton(onClick = {
                         if (state.selectedId != null) viewModel.select(null) else onBack()
-                    }) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Back") }
+                    }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                },
+                actions = {
+                    if (selected?.userCreated == true) {
+                        IconButton(onClick = { showDeleteCategory = true }) {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = "Delete collection",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -93,7 +129,7 @@ fun CategoriesScreen(
             if (isEmpty) {
                 Column(Modifier.padding(padding).fillMaxSize()) {
                     EmptyState(
-                        emoji = "📭",
+                        emoji = "\uD83D\uDCEC",
                         headline = "Nothing here yet",
                         body = "Save something into ${selected?.name ?: "this"} from the share sheet, then it'll show up.",
                         accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary
@@ -102,7 +138,7 @@ fun CategoriesScreen(
             } else {
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
-                    contentPadding = PaddingValues(12.dp),
+                    contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp),
                     verticalItemSpacing = 12.dp,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(padding).fillMaxSize()
@@ -135,7 +171,7 @@ private fun CategoryGrid(
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier.fillMaxSize()
@@ -156,8 +192,8 @@ private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .height(140.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .height(168.dp)
+            .clip(RoundedCornerShape(22.dp))
             .background(color.copy(alpha = 0.16f))
             .clickable(onClick = onClick)
             .padding(18.dp),
@@ -165,11 +201,11 @@ private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
     ) {
         Box(
             Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(color),
+                .size(72.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(color.copy(alpha = 0.95f)),
             contentAlignment = Alignment.Center
-        ) { Text(c.emoji, style = MaterialTheme.typography.titleLarge) }
+        ) { Text(c.emoji, style = MaterialTheme.typography.displaySmall) }
         Column {
             Text(
                 c.name,

@@ -85,6 +85,12 @@ abstract class TagDao {
         """
     )
     abstract suspend fun itemIdsForTag(name: String): List<Long>
+
+    @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE ASC")
+    abstract suspend fun allForExport(): List<TagEntity>
+
+    @Query("SELECT * FROM item_tags ORDER BY item_id ASC, tag_id ASC")
+    abstract suspend fun linksForExport(): List<ItemTagCrossRef>
 }
 
 data class TagWithCount(val id: Long, val name: String, val count: Int)

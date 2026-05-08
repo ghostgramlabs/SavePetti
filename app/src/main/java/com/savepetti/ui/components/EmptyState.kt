@@ -29,10 +29,12 @@ fun EmptyState(
     accent: Color = MaterialTheme.colorScheme.primary,
     cta: String? = null,
     onCta: (() -> Unit)? = null,
+    fillScreen: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val layoutModifier = if (fillScreen) modifier.fillMaxSize() else modifier.fillMaxWidth()
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
+        modifier = layoutModifier.padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

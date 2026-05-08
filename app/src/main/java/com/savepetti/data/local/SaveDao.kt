@@ -31,6 +31,12 @@ interface SaveDao {
     @Query("SELECT * FROM save_items WHERE id = :id LIMIT 1")
     fun observeById(id: Long): Flow<SaveItemEntity?>
 
+    @Query("SELECT * FROM save_items ORDER BY created_at DESC LIMIT :limit")
+    suspend fun browseForSearch(limit: Int = 200): List<SaveItemEntity>
+
+    @Query("SELECT * FROM save_items ORDER BY created_at DESC")
+    suspend fun allForExport(): List<SaveItemEntity>
+
     // ── Hot, capped browses (Home) ───────────────────────────────────────
 
     @Query("SELECT * FROM save_items ORDER BY created_at DESC LIMIT :limit")
@@ -114,7 +120,7 @@ interface SaveDao {
     @Query(
         """
         SELECT s.* FROM save_items s
-        JOIN save_items_fts f ON f.rowid = s.id
+        JOIN save_items_fts ON save_items_fts.rowid = s.id
         WHERE save_items_fts MATCH :query
         ORDER BY s.created_at DESC
         LIMIT 200

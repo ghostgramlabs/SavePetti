@@ -56,11 +56,23 @@ class SearchViewModel @Inject constructor(
         _sourceFilter, _categoryFilter, _typeFilter, _tagFilter
     ) { src, cat, type, tag -> Filters(src, cat, type, tag) }
 
-    private val ftsResults: StateFlow<List<SaveItemEntity>> = _query
-        .debounce(180)
-        .distinctUntilChanged()
-        .flatMapLatest { q ->
-            flow { emit(if (q.isBlank()) emptyList() else repo.search(q)) }
+    private val candidates: StateFlow<List<SaveItemEntity>> = combine(
+        _query
+            .debounce(180)
+            .distinctUntilChanged(),
+        filters
+    ) { q, f -> q to f }
+        .flatMapLatest { (q, f) ->
+            flow {
+                val haveFilters = f.source != null || f.category != null || f.type != null || f.tag != null
+                emit(
+                    when {
+                        q.isNotBlank() -> repo.search(q)
+                        haveFilters -> repo.browseForSearch()
+                        else -> emptyList()
+                    }
+                )
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
@@ -80,19 +92,17 @@ class SearchViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val state: StateFlow<SearchState> = combine(
-        _query, filters, ftsResults, repo.observeCategories(), knownTags, tagItemIdSet
+        _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val q = args[0] as String
         val f = args[1] as Filters
-        val fts = args[2] as List<SaveItemEntity>
+        val candidates = args[2] as List<SaveItemEntity>
         val cats = args[3] as List<CategoryEntity>
         val tags = args[4] as List<String>
         val tagIds = args[5] as Set<Long>?
 
-        val haveFilters = f.source != null || f.category != null || f.type != null || f.tag != null
-        val basis = if (q.isBlank() && !haveFilters) emptyList() else fts
-        val filtered = basis.filter { item ->
+        val filtered = candidates.filter { item ->
             (f.source == null || item.sourceApp == f.source) &&
                 (f.category == null || item.categoryId == f.category) &&
                 (f.type == null || item.contentType == f.type.name) &&

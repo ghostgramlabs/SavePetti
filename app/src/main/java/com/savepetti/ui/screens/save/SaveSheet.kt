@@ -87,7 +87,7 @@ fun SaveSheet(
     val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) { viewModel.ingest(incoming) }
-    // Deliberately not auto-focusing the title — the primary action is
+    // Deliberately not auto-focusing the title - the primary action is
     // picking a collection. The user opens the sheet, taps a chip, taps Save.
     // Editing the title or adding a note is an optional second step that
     // shouldn't pop the keyboard up unprompted.
@@ -151,7 +151,7 @@ fun SaveSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 "Save this?",
                 style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black),
@@ -159,7 +159,7 @@ fun SaveSheet(
             )
             Text(
                 "${state.sourceApp.emoji} ${state.sourceApp.displayName}" +
-                    if (state.attachments.size > 1) " · ${state.attachments.size} items" else "",
+                    if (state.attachments.size > 1) " - ${state.attachments.size} items" else "",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -198,7 +198,7 @@ fun SaveSheet(
                 }
             }
 
-            // Resolved title shown as compact text — display only by default,
+            // Resolved title shown as compact text - display only by default,
             // editable on demand. Avoids popping the keyboard up just to view.
             Text(
                 state.title.ifBlank { "Untitled" },
@@ -217,7 +217,7 @@ fun SaveSheet(
                 )
             }
 
-            // ── Primary action: pick a collection ─────────────────────────
+            // Primary action: pick a collection.
             Spacer(Modifier.height(20.dp))
             Text(
                 "Save to",
@@ -243,7 +243,7 @@ fun SaveSheet(
                 }
             }
 
-            // ── Optional: title / note / tags expand on demand ─────────────
+            // Optional details expand on demand.
             Spacer(Modifier.height(20.dp))
             OptionalDetails(
                 title = state.title,
@@ -261,7 +261,7 @@ fun SaveSheet(
                     onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
                 ) {
                     Text(
-                        "or add to an existing save →",
+                        "or add to an existing save ->",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -271,7 +271,7 @@ fun SaveSheet(
             // sticky action bar even before the user scrolls.
             Spacer(Modifier.height(16.dp))
         }
-        // Sticky action bar — always visible regardless of keyboard / content.
+        // Sticky action bar - always visible regardless of keyboard / content.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -342,7 +342,7 @@ private fun PickExistingBody(
                 val cat = categories.firstOrNull { it.id == item.categoryId }
                 PickRow(
                     title = item.title,
-                    subtitle = listOfNotNull(cat?.let { "${it.emoji} ${it.name}" }, item.url).joinToString(" · ").take(80),
+                    subtitle = listOfNotNull(cat?.let { "${it.emoji} ${it.name}" }, item.url).joinToString(" - ").take(80),
                     onClick = { onPick(item.id) }
                 )
             }
@@ -378,12 +378,12 @@ private fun PickRow(title: String, subtitle: String, onClick: () -> Unit) {
                 )
             }
         }
-        Text("→", style = MaterialTheme.typography.titleMedium, color = scheme.primary)
+        Text("->", style = MaterialTheme.typography.titleMedium, color = scheme.primary)
     }
 }
 
 /**
- * Title / notes / tags are all optional on save — Stash's UX. We show one
+ * Title / notes / tags are all optional on save - Stash's UX. We show one
  * compact row of "Add ..." chips. Tapping one inlines the field; the
  * keyboard only ever appears in response to a tap, never on sheet open.
  */

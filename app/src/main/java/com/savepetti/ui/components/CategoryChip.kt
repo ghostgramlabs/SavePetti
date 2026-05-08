@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * A category chip with a slight tilt (-2°/+1°) so a row of chips looks
+ * A category chip with a slight tilt so a row of chips looks
  * hand-placed, not aligned-by-grid. Selected chips fill with the category
  * color; unselected use a soft tint of it on the cream background.
  */
@@ -51,8 +52,19 @@ fun CategoryChip(
             .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {
         if (!emoji.isNullOrBlank()) {
-            Text(emoji, style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.width(6.dp))
+            Row(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(
+                        if (selected) Color.White.copy(alpha = 0.18f) else color.copy(alpha = 0.2f),
+                        RoundedCornerShape(50)
+                    ),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(emoji, style = MaterialTheme.typography.titleMedium)
+            }
+            Spacer(Modifier.width(8.dp))
         }
         Text(
             label,

@@ -17,6 +17,7 @@ import javax.inject.Inject
 data class SourceCount(val source: String, val emoji: String, val display: String, val count: Int)
 
 data class HomeState(
+    val isLoading: Boolean = true,
     val recent: List<SaveItemEntity> = emptyList(),
     val pinned: List<SaveItemEntity> = emptyList(),
     val favorites: List<SaveItemEntity> = emptyList(),
@@ -57,6 +58,7 @@ class HomeViewModel @Inject constructor(
         }.take(8)
 
         HomeState(
+            isLoading = false,
             recent = recent,
             pinned = pinned,
             favorites = favs,
@@ -69,4 +71,6 @@ class HomeViewModel @Inject constructor(
     fun toggleFavorite(item: SaveItemEntity) = viewModelScope.launch {
         repo.setFavorite(item.id, !item.isFavorite)
     }
+
+    suspend fun exportBackupJson(): String = repo.exportBackupJson()
 }

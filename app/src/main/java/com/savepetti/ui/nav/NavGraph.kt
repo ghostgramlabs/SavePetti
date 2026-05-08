@@ -1,6 +1,8 @@
 package com.savepetti.ui.nav
 
-import androidx.compose.foundation.layout.padding
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
@@ -24,6 +26,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.savepetti.data.preferences.ThemeMode
 import com.savepetti.ui.screens.categories.CategoriesScreen
 import com.savepetti.ui.screens.detail.DetailScreen
 import com.savepetti.ui.screens.home.HomeScreen
@@ -35,7 +38,8 @@ object Routes {
     const val Detail = "detail/{id}"
     const val Categories = "categories?cid={cid}"
 
-    fun search(q: String = "", src: String = "") = "search?q=$q&src=$src"
+    fun search(q: String = "", src: String = "") =
+        "search?q=${Uri.encode(q)}&src=${Uri.encode(src)}"
     fun detail(id: Long) = "detail/$id"
     fun categories(cid: String? = null) = "categories?cid=${cid.orEmpty()}"
 }
@@ -54,7 +58,10 @@ private val topTabs = listOf(
 )
 
 @Composable
-fun SavePettiNavGraph() {
+fun SavePettiNavGraph(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
     val nav = rememberNavController()
     val backStackEntry by nav.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
@@ -65,11 +72,11 @@ fun SavePettiNavGraph() {
             if (showBottomBar) BottomNav(nav, currentRoute)
         },
         containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
+    ) {
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier
         ) {
             composable(Routes.Home) {
                 HomeScreen(
@@ -77,7 +84,9 @@ fun SavePettiNavGraph() {
                     onOpenSearch = { q -> nav.navigateTopLevel(Routes.search(q)) },
                     onOpenSource = { src -> nav.navigate(Routes.search(src = src)) },
                     onOpenCategory = { cid -> nav.navigate(Routes.categories(cid)) },
-                    onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) }
+                    onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) },
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange
                 )
             }
             composable(
@@ -121,7 +130,10 @@ fun SavePettiNavGraph() {
 private fun BottomNav(nav: NavHostController, currentRoute: String) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp
+        tonalElevation = 3.dp,
+        modifier = Modifier.border(
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        )
     ) {
         topTabs.forEach { tab ->
             val selected = tab.matches(currentRoute)
@@ -153,4 +165,3 @@ private fun NavHostController.navigateTopLevel(route: String) {
         restoreState = true
     }
 }
-

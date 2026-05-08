@@ -21,15 +21,15 @@ data class CategoryPreset(
 object CategoryPalette {
     // Mirrors the reference app's category strip exactly.
     val Defaults: List<CategoryPreset> = listOf(
-        CategoryPreset("recipes",    "Recipes",    "🍳", RecipeOrange.toLongHex()),
-        CategoryPreset("travel",     "Travel",     "✈️", TravelTeal.toLongHex()),
-        CategoryPreset("fitness",    "Fitness",    "💪", FitnessIndigo.toLongHex()),
-        CategoryPreset("style",      "Style",      "👗", StyleAmber.toLongHex()),
-        CategoryPreset("home",       "Home",       "🏡", HomePurple.toLongHex()),
-        CategoryPreset("beauty",     "Beauty",     "💄", BeautyPink.toLongHex()),
-        CategoryPreset("read_later", "Read Later", "📖", ReadLaterSky.toLongHex()),
-        CategoryPreset("finance",    "Finance",    "💰", FinanceEmerald.toLongHex()),
-        CategoryPreset("music",      "Music",      "🎵", MusicCoral.toLongHex())
+        CategoryPreset("recipes",    "Recipes",    "\uD83C\uDF73", RecipeOrange.toLongHex()),
+        CategoryPreset("travel",     "Travel",     "\u2708\uFE0F", TravelTeal.toLongHex()),
+        CategoryPreset("fitness",    "Fitness",    "\uD83D\uDCAA", FitnessIndigo.toLongHex()),
+        CategoryPreset("style",      "Style",      "\uD83D\uDC57", StyleAmber.toLongHex()),
+        CategoryPreset("home",       "Home",       "\uD83C\uDFE1", HomePurple.toLongHex()),
+        CategoryPreset("beauty",     "Beauty",     "\uD83D\uDC84", BeautyPink.toLongHex()),
+        CategoryPreset("read_later", "Read Later", "\uD83D\uDCD6", ReadLaterSky.toLongHex()),
+        CategoryPreset("finance",    "Finance",    "\uD83D\uDCB0", FinanceEmerald.toLongHex()),
+        CategoryPreset("music",      "Music",      "\uD83C\uDFB5", MusicCoral.toLongHex())
     )
 
     fun colorOf(hex: Long): Color = Color(hex)

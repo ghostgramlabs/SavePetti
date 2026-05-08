@@ -1,4 +1,4 @@
-package com.savepetti.ui.screens.search
+﻿package com.savepetti.ui.screens.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,7 +97,7 @@ fun SearchScreen(
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             SearchField(
                 value = state.query,
                 placeholder = "Search anything you saved",
@@ -123,20 +123,25 @@ fun SearchScreen(
 
             val anyFilter = activeFilterCount > 0
             when {
-                state.query.isBlank() && !anyFilter -> EmptyState(
-                    emoji = "🔍",
-                    headline = "Find anything",
-                    body = "Type a word from a title, note, OCR text from a screenshot, even a recipe ingredient. We'll dig it up."
-                )
+                state.query.isBlank() && !anyFilter -> {
+                    QuickSearchSuggestions(
+                        onToggleType = viewModel::toggleType
+                    )
+                    EmptyState(
+                        emoji = "\uD83D\uDD0D",
+                        headline = "Find anything",
+                        body = "Try a suggestion, or type a word from a title, note, source, or OCR text."
+                    )
+                }
                 state.results.isEmpty() -> EmptyState(
-                    emoji = "🤔",
+                    emoji = "\uD83E\uDD14",
                     headline = "Nothing matched",
-                    body = "Try a shorter word, drop a filter, or check spelling. OCR is still indexing recent screenshots — give it a sec."
+                    body = "Try a shorter word, drop a filter, or check spelling. OCR is still indexing recent screenshots - give it a sec."
                 )
                 else -> {
                     LazyVerticalStaggeredGrid(
                         columns = StaggeredGridCells.Fixed(2),
-                        contentPadding = PaddingValues(12.dp),
+                        contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
                         verticalItemSpacing = 12.dp,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -161,6 +166,53 @@ fun SearchScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickSearchSuggestions(
+    onToggleType: (ContentType) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            CategoryChip(
+                label = "Screenshots",
+                emoji = "\uD83D\uDDBC",
+                color = MaterialTheme.colorScheme.primary,
+                selected = false,
+                onClick = { onToggleType(ContentType.IMAGE) }
+            )
+        }
+        item {
+            CategoryChip(
+                label = "Links",
+                emoji = "\uD83D\uDD17",
+                color = MaterialTheme.colorScheme.secondary,
+                selected = false,
+                onClick = { onToggleType(ContentType.LINK) }
+            )
+        }
+        item {
+            CategoryChip(
+                label = "PDFs",
+                emoji = "\uD83D\uDCC4",
+                color = MaterialTheme.colorScheme.tertiary,
+                selected = false,
+                onClick = { onToggleType(ContentType.PDF) }
+            )
+        }
+        item {
+            CategoryChip(
+                label = "Notes",
+                emoji = "\uD83D\uDDD2",
+                color = MaterialTheme.colorScheme.primary,
+                selected = false,
+                onClick = { onToggleType(ContentType.NOTE) }
+            )
         }
     }
 }
@@ -227,22 +279,22 @@ private fun FilterToolbar(
         // tap to remove individually).
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             state.typeFilter?.let { t ->
-                item { ActivePill("${t.label()} ✕") { onToggleType(t) } }
+                item { ActivePill("${t.label()} x") { onToggleType(t) } }
             }
             state.categoryFilter?.let { cid ->
                 val c = state.categories.firstOrNull { it.id == cid }
                 if (c != null) {
-                    item { ActivePill("${c.emoji} ${c.name} ✕") { onToggleCategory(cid) } }
+                    item { ActivePill("${c.emoji} ${c.name} x") { onToggleCategory(cid) } }
                 }
             }
             state.sourceFilter?.let { sf ->
                 val sa = runCatching { SourceApp.valueOf(sf) }.getOrNull()
                 if (sa != null) {
-                    item { ActivePill("${sa.emoji} ${sa.displayName} ✕") { onToggleSource(sf) } }
+                    item { ActivePill("${sa.emoji} ${sa.displayName} x") { onToggleSource(sf) } }
                 }
             }
             state.tagFilter?.let { tag ->
-                item { ActivePill("#$tag ✕") { onToggleTag(tag) } }
+                item { ActivePill("#$tag x") { onToggleTag(tag) } }
             }
         }
     }
@@ -365,11 +417,11 @@ private fun FilterGroupTitle(title: String) {
 }
 
 private fun typeChoices() = listOf(
-    Triple(ContentType.LINK, "Links", "🔗"),
-    Triple(ContentType.IMAGE, "Images", "🖼"),
-    Triple(ContentType.PDF, "PDFs", "📄"),
-    Triple(ContentType.TEXT, "Text", "📝"),
-    Triple(ContentType.NOTE, "Notes", "🗒")
+    Triple(ContentType.LINK, "Links", "\uD83D\uDD17"),
+    Triple(ContentType.IMAGE, "Images", "\uD83D\uDDBC"),
+    Triple(ContentType.PDF, "PDFs", "\uD83D\uDCC4"),
+    Triple(ContentType.TEXT, "Text", "\uD83D\uDCDD"),
+    Triple(ContentType.NOTE, "Notes", "\uD83D\uDDD2")
 )
 
 private fun ContentType.label(): String = when (this) {

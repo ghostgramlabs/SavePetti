@@ -89,4 +89,8 @@ class DetailViewModel @Inject constructor(
         val it = state.value.item ?: return@launch
         repo.removeTag(it.id, tag)
     }
+
+    fun deleteAttachment(id: Long) = viewModelScope.launch {
+        repo.deleteAttachment(id)
+    }
 }

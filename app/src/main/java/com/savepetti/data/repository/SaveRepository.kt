@@ -16,6 +16,8 @@ import com.savepetti.data.local.TagWithCount
 import com.savepetti.data.util.AttachmentStore
 import com.savepetti.domain.model.CategoryPalette
 import kotlinx.coroutines.flow.Flow
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,18 +31,26 @@ class SaveRepository @Inject constructor(
 ) {
 
     suspend fun seedCategoriesIfEmpty() {
-        if (categoryDao.count() == 0) {
-            categoryDao.insertAll(
-                CategoryPalette.Defaults.mapIndexed { i, p ->
-                    CategoryEntity(
-                        id = p.id,
-                        name = p.name,
-                        emoji = p.emoji,
-                        colorHex = p.colorHex,
-                        sortOrder = i
-                    )
-                }
+        val defaults = CategoryPalette.Defaults.mapIndexed { i, p ->
+            CategoryEntity(
+                id = p.id,
+                name = p.name,
+                emoji = p.emoji,
+                colorHex = p.colorHex,
+                sortOrder = i
             )
+        }
+        if (categoryDao.count() == 0) {
+            categoryDao.insertAll(defaults)
+        } else {
+            defaults.forEach { category ->
+                val existing = categoryDao.getById(category.id)
+                if (existing == null) {
+                    categoryDao.upsert(category)
+                } else if (!existing.userCreated) {
+                    categoryDao.upsert(category.copy(createdAt = existing.createdAt))
+                }
+            }
         }
     }
 
@@ -65,6 +75,7 @@ class SaveRepository @Inject constructor(
     fun observeRecent(limit: Int = 20) = saveDao.observeRecent(limit)
     fun observeFavorites() = saveDao.observeFavorites()
     fun observePinned() = saveDao.observePinned()
+    suspend fun browseForSearch(): List<SaveItemEntity> = saveDao.browseForSearch()
 
     // Paged browses for large lists.
     fun pagedAll(): PagingSource<Int, SaveItemEntity> = saveDao.pagedAll()
@@ -94,6 +105,70 @@ class SaveRepository @Inject constructor(
     fun observeCategories(): Flow<List<CategoryEntity>> = categoryDao.observeAll()
     suspend fun upsertCategory(c: CategoryEntity) = categoryDao.upsert(c)
     suspend fun getCategory(id: String) = categoryDao.getById(id)
+    suspend fun deleteCategory(id: String) = categoryDao.delete(id)
+
+    suspend fun exportBackupJson(): String {
+        val root = JSONObject()
+            .put("schema", 1)
+            .put("exportedAt", System.currentTimeMillis())
+        root.put("categories", JSONArray().apply {
+            categoryDao.allForExport().forEach { c ->
+                put(JSONObject()
+                    .put("id", c.id)
+                    .put("name", c.name)
+                    .put("emoji", c.emoji)
+                    .put("colorHex", c.colorHex)
+                    .put("sortOrder", c.sortOrder)
+                    .put("parentId", c.parentId)
+                    .put("userCreated", c.userCreated)
+                    .put("createdAt", c.createdAt))
+            }
+        })
+        root.put("saves", JSONArray().apply {
+            saveDao.allForExport().forEach { s ->
+                put(JSONObject()
+                    .put("id", s.id)
+                    .put("title", s.title)
+                    .put("url", s.url)
+                    .put("localUri", s.localUri)
+                    .put("thumbnailUri", s.thumbnailUri)
+                    .put("contentType", s.contentType)
+                    .put("sourceApp", s.sourceApp)
+                    .put("categoryId", s.categoryId)
+                    .put("notes", s.notes)
+                    .put("ocrText", s.ocrText)
+                    .put("metadataJson", s.metadataJson)
+                    .put("favorite", s.isFavorite)
+                    .put("pinned", s.isPinned)
+                    .put("createdAt", s.createdAt)
+                    .put("updatedAt", s.updatedAt)
+                    .put("openedAt", s.openedAt))
+            }
+        })
+        root.put("attachments", JSONArray().apply {
+            attachmentDao.allForExport().forEach { a ->
+                put(JSONObject()
+                    .put("id", a.id)
+                    .put("itemId", a.itemId)
+                    .put("uri", a.uri)
+                    .put("kind", a.kind)
+                    .put("ocrText", a.ocrText)
+                    .put("sortOrder", a.sortOrder)
+                    .put("createdAt", a.createdAt))
+            }
+        })
+        root.put("tags", JSONArray().apply {
+            tagDao.allForExport().forEach { t ->
+                put(JSONObject().put("id", t.id).put("name", t.name).put("createdAt", t.createdAt))
+            }
+        })
+        root.put("itemTags", JSONArray().apply {
+            tagDao.linksForExport().forEach { ref ->
+                put(JSONObject().put("itemId", ref.itemId).put("tagId", ref.tagId))
+            }
+        })
+        return root.toString(2)
+    }
 
     // ── Attachments ───────────────────────────────────────────────────────
 
@@ -103,6 +178,11 @@ class SaveRepository @Inject constructor(
     fun observeAttachments(itemId: Long) = attachmentDao.observeForItem(itemId)
     suspend fun attachmentsFor(itemId: Long) = attachmentDao.forItem(itemId)
     suspend fun setAttachmentOcr(id: Long, text: String) = attachmentDao.setOcrText(id, text)
+    suspend fun deleteAttachment(id: Long) {
+        val attachment = attachmentDao.getById(id) ?: return
+        attachmentDao.delete(id)
+        attachmentStore.deleteByUris(listOf(attachment.uri))
+    }
 
     // ── Tags ──────────────────────────────────────────────────────────────
 

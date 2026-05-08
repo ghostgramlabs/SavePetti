@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class CategoriesState(
@@ -68,4 +69,12 @@ class CategoriesViewModel @Inject constructor(
     }.cachedIn(viewModelScope)
 
     fun select(id: String?) { _selected.value = id }
+
+    fun deleteSelectedCategory() = viewModelScope.launch {
+        val id = _selected.value ?: return@launch
+        val category = state.value.categories.firstOrNull { it.id == id } ?: return@launch
+        if (!category.userCreated) return@launch
+        repo.deleteCategory(id)
+        _selected.value = null
+    }
 }

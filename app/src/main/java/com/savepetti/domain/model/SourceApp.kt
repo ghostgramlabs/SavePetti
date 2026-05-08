@@ -1,18 +1,18 @@
 package com.savepetti.domain.model
 
 enum class SourceApp(val displayName: String, val emoji: String) {
-    INSTAGRAM("Instagram", "📷"),
-    REDDIT("Reddit", "👽"),
-    YOUTUBE("YouTube", "▶"),
-    CHROME("Chrome", "🌐"),
-    MAPS("Maps", "📍"),
-    WHATSAPP("WhatsApp", "💬"),
-    TWITTER("X / Twitter", "🐦"),
-    PINTEREST("Pinterest", "📌"),
-    SPOTIFY("Spotify", "🎵"),
-    AMAZON("Amazon", "📦"),
-    FILES("Files", "📁"),
-    UNKNOWN("Other", "✨");
+    INSTAGRAM("Instagram", "\uD83D\uDCF7"),
+    REDDIT("Reddit", "\uD83D\uDC7D"),
+    YOUTUBE("YouTube", "\u25B6"),
+    CHROME("Chrome", "\uD83C\uDF10"),
+    MAPS("Maps", "\uD83D\uDCCD"),
+    WHATSAPP("WhatsApp", "\uD83D\uDCAC"),
+    TWITTER("X / Twitter", "\uD83D\uDC26"),
+    PINTEREST("Pinterest", "\uD83D\uDCCC"),
+    SPOTIFY("Spotify", "\uD83C\uDFB5"),
+    AMAZON("Amazon", "\uD83D\uDCE6"),
+    FILES("Files", "\uD83D\uDCC1"),
+    UNKNOWN("Other", "\u2728");
 
     companion object {
         fun fromUrl(url: String?): SourceApp {

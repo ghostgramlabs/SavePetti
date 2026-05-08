@@ -21,6 +21,12 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachments WHERE item_id = :itemId ORDER BY sort_order ASC")
     suspend fun forItem(itemId: Long): List<AttachmentEntity>
 
+    @Query("SELECT * FROM attachments WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): AttachmentEntity?
+
+    @Query("SELECT * FROM attachments ORDER BY item_id ASC, sort_order ASC")
+    suspend fun allForExport(): List<AttachmentEntity>
+
     /**
      * Returns the URIs of attachments belonging to an item — used pre-delete
      * so the repository can clean up the underlying files in filesDir/ once
