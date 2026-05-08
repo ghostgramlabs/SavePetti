@@ -22,8 +22,11 @@ interface CategoryDao {
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun delete(id: String)
 
-    @Query("SELECT * FROM categories ORDER BY sortOrder ASC, name ASC")
+    @Query("SELECT * FROM categories ORDER BY sort_order ASC, name ASC")
     fun observeAll(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT * FROM categories WHERE parent_id = :parentId ORDER BY sort_order ASC, name ASC")
+    fun observeChildrenOf(parentId: String): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): CategoryEntity?

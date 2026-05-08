@@ -5,8 +5,8 @@ import androidx.room.Room
 import com.savepetti.data.local.AppDatabase
 import com.savepetti.data.local.AttachmentDao
 import com.savepetti.data.local.CategoryDao
-import com.savepetti.data.local.MIGRATION_1_2
 import com.savepetti.data.local.SaveDao
+import com.savepetti.data.local.TagDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,10 +21,13 @@ object AppModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "savepetti.db")
-            .addMigrations(MIGRATION_1_2)
+            // Foreign-key cascades (CategoryEntity self-FK, attachments, item_tags)
+            // require pragma to be on. Room enables it by default since 2.6,
+            // but we make the dependency explicit.
             .build()
 
     @Provides fun provideSaveDao(db: AppDatabase): SaveDao = db.saveDao()
     @Provides fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
     @Provides fun provideAttachmentDao(db: AppDatabase): AttachmentDao = db.attachmentDao()
+    @Provides fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()
 }

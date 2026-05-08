@@ -21,6 +21,20 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachments WHERE item_id = :itemId ORDER BY sort_order ASC")
     suspend fun forItem(itemId: Long): List<AttachmentEntity>
 
+    /**
+     * Returns the URIs of attachments belonging to an item — used pre-delete
+     * so the repository can clean up the underlying files in filesDir/ once
+     * the cascade fires.
+     */
+    @Query(
+        """
+        SELECT a.uri FROM attachments a WHERE a.item_id = :itemId
+        UNION
+        SELECT s.local_uri FROM save_items s WHERE s.id = :itemId AND s.local_uri IS NOT NULL
+        """
+    )
+    suspend fun urisForItem(itemId: Long): List<String>
+
     @Query("UPDATE attachments SET ocr_text = :text WHERE id = :id")
     suspend fun setOcrText(id: Long, text: String)
 

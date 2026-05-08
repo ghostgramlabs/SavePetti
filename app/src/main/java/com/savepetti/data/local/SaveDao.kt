@@ -1,5 +1,6 @@
 package com.savepetti.data.local
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -7,6 +8,11 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Hot read paths return [Flow] so the UI auto-refreshes on writes; large
+ * browses return [PagingSource] so we never materialize more than the visible
+ * window plus a small buffer.
+ */
 @Dao
 interface SaveDao {
 
@@ -25,23 +31,71 @@ interface SaveDao {
     @Query("SELECT * FROM save_items WHERE id = :id LIMIT 1")
     fun observeById(id: Long): Flow<SaveItemEntity?>
 
-    @Query("SELECT * FROM save_items ORDER BY is_pinned DESC, created_at DESC")
-    fun observeAll(): Flow<List<SaveItemEntity>>
-
-    @Query("SELECT * FROM save_items WHERE is_favorite = 1 ORDER BY created_at DESC")
-    fun observeFavorites(): Flow<List<SaveItemEntity>>
-
-    @Query("SELECT * FROM save_items WHERE is_pinned = 1 ORDER BY updated_at DESC")
-    fun observePinned(): Flow<List<SaveItemEntity>>
-
-    @Query("SELECT * FROM save_items WHERE category_id = :categoryId ORDER BY created_at DESC")
-    fun observeByCategory(categoryId: String): Flow<List<SaveItemEntity>>
+    // ── Hot, capped browses (Home) ───────────────────────────────────────
 
     @Query("SELECT * FROM save_items ORDER BY created_at DESC LIMIT :limit")
-    fun observeRecent(limit: Int = 12): Flow<List<SaveItemEntity>>
+    fun observeRecent(limit: Int = 20): Flow<List<SaveItemEntity>>
 
-    @Query("SELECT * FROM save_items WHERE opened_at IS NOT NULL ORDER BY opened_at DESC LIMIT :limit")
-    fun observeRecentlyOpened(limit: Int = 8): Flow<List<SaveItemEntity>>
+    @Query("SELECT * FROM save_items WHERE is_pinned = 1 ORDER BY updated_at DESC LIMIT :limit")
+    fun observePinned(limit: Int = 12): Flow<List<SaveItemEntity>>
+
+    @Query("SELECT * FROM save_items WHERE is_favorite = 1 ORDER BY created_at DESC LIMIT :limit")
+    fun observeFavorites(limit: Int = 12): Flow<List<SaveItemEntity>>
+
+    // ── Paged browses (Categories drill-in, future "all saves") ──────────
+
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE category_id = :categoryId
+        ORDER BY is_pinned DESC, created_at DESC
+        """
+    )
+    fun pagedByCategory(categoryId: String): PagingSource<Int, SaveItemEntity>
+
+    @Query(
+        """
+        SELECT * FROM save_items
+        ORDER BY is_pinned DESC, created_at DESC
+        """
+    )
+    fun pagedAll(): PagingSource<Int, SaveItemEntity>
+
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE source_app = :sourceApp
+        ORDER BY is_pinned DESC, created_at DESC
+        """
+    )
+    fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity>
+
+    // ── Aggregate queries: avoid loading rows just to count ───────────────
+
+    @Query(
+        """
+        SELECT source_app AS source, COUNT(*) AS count
+        FROM save_items
+        GROUP BY source_app
+        ORDER BY count DESC
+        """
+    )
+    fun observeSourceCounts(): Flow<List<SourceCount>>
+
+    @Query(
+        """
+        SELECT category_id AS categoryId, COUNT(*) AS count
+        FROM save_items
+        WHERE category_id IS NOT NULL
+        GROUP BY category_id
+        """
+    )
+    fun observeCategoryCounts(): Flow<List<CategoryCount>>
+
+    @Query("SELECT COUNT(*) FROM save_items")
+    fun observeTotal(): Flow<Int>
+
+    // ── Mutations ────────────────────────────────────────────────────────
 
     @Query("UPDATE save_items SET is_favorite = :fav, updated_at = :ts WHERE id = :id")
     suspend fun setFavorite(id: Long, fav: Boolean, ts: Long = System.currentTimeMillis())
@@ -55,6 +109,8 @@ interface SaveDao {
     @Query("UPDATE save_items SET ocr_text = :text, updated_at = :ts WHERE id = :id")
     suspend fun setOcrText(id: Long, text: String, ts: Long = System.currentTimeMillis())
 
+    // ── FTS search ───────────────────────────────────────────────────────
+
     @Query(
         """
         SELECT s.* FROM save_items s
@@ -65,10 +121,7 @@ interface SaveDao {
         """
     )
     suspend fun search(query: String): List<SaveItemEntity>
-
-    @Query("SELECT COUNT(*) FROM save_items")
-    fun observeCount(): Flow<Int>
-
-    @Query("SELECT COUNT(*) FROM save_items WHERE category_id = :categoryId")
-    fun observeCountByCategory(categoryId: String): Flow<Int>
 }
+
+data class SourceCount(val source: String, val count: Int)
+data class CategoryCount(val categoryId: String, val count: Int)
