@@ -5,19 +5,26 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <path android:pathData="M0,0 H108 V108 H0 Z" android:fillColor="#FFE8B0"/>
+    <!-- Cream background tile -->
+    <path android:pathData="M0,0 H108 V108 H0 Z" android:fillColor="#FFF6E6"/>
+
+    <!-- Soft coral disc behind the bookmark -->
     <path
-        android:pathData="M30,52 L78,52 L78,78 C78,80 76,82 74,82 L34,82 C32,82 30,80 30,78 Z"
+        android:pathData="M54,54 m -32,0 a 32,32 0 1,0 64,0 a 32,32 0 1,0 -64,0"
+        android:fillColor="#FFD7C2" />
+
+    <!-- Bookmark / save mark in coral, with notch -->
+    <path
+        android:pathData="M40,30 L66,30 C68.21,30 70,31.79 70,34 L70,82 L53,72 L36,82 L36,34 C36,31.79 37.79,30 40,30 Z"
         android:fillColor="#FF5A5F" />
+
+    <!-- Highlight stripe for depth -->
     <path
-        android:pathData="M28,46 L80,46 C82,46 83,47 83,49 L83,54 C83,56 82,57 80,57 L28,57 C26,57 25,56 25,54 L25,49 C25,47 26,46 28,46 Z"
-        android:fillColor="#E43F44" />
+        android:pathData="M44,36 L62,36 L62,40 L44,40 Z"
+        android:fillColor="#FF8181" />
+
+    <!-- Tiny gold star to convey 'saved / favorite' -->
     <path
-        android:pathData="M48,38 C50,32 58,32 60,38 L62,46 L46,46 Z"
+        android:pathData="M53,46 L55,52 L61,52 L56,55 L58,61 L53,57 L48,61 L50,55 L45,52 L51,52 Z"
         android:fillColor="#FFB800" />
-    <path
-        android:pathData="M40,68 L68,68"
-        android:strokeColor="#FFF8F1"
-        android:strokeWidth="3"
-        android:strokeLineCap="round" />
 </vector>

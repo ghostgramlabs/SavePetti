@@ -43,9 +43,10 @@ val PersonalPink = BeautyPink
 val ReadingForest = FinanceEmerald
 val FavoritesGold = StyleAmber
 
-// Dark variants
+// Dark variants — bumped outline so borders don't disappear, lifted surface
+// tint so cards have visible edges against background.
 val InkDark = Color(0xFF14130F)
-val SurfaceDark = Color(0xFF1F1D17)
-val SurfaceTintDark = Color(0xFF2A271F)
-val OutlineDark = Color(0xFF3A3528)
+val SurfaceDark = Color(0xFF22201A)
+val SurfaceTintDark = Color(0xFF2F2C22)
+val OutlineDark = Color(0xFF54503F)
 val CreamOnDark = Color(0xFFF1E7D4)
