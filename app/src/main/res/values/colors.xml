@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cream">#FFF8F1</color>
+    <color name="ink">#1B1A17</color>
+    <color name="coral">#FF5A5F</color>
+    <color name="coral_deep">#E43F44</color>
+    <color name="butter">#FFE8B0</color>
+    <color name="ic_launcher_background">#FFE8B0</color>
+</resources>

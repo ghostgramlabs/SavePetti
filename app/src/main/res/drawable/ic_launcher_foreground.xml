@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- A little open shoebox: the "save shelf" mark -->
+    <path
+        android:pathData="M30,52 L78,52 L78,78 C78,80 76,82 74,82 L34,82 C32,82 30,80 30,78 Z"
+        android:fillColor="#FF5A5F" />
+    <path
+        android:pathData="M28,46 L80,46 C82,46 83,47 83,49 L83,54 C83,56 82,57 80,57 L28,57 C26,57 25,56 25,54 L25,49 C25,47 26,46 28,46 Z"
+        android:fillColor="#E43F44" />
+    <path
+        android:pathData="M48,38 C50,32 58,32 60,38 L62,46 L46,46 Z"
+        android:fillColor="#FFB800" />
+    <path
+        android:pathData="M40,68 L68,68"
+        android:strokeColor="#FFF8F1"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+</vector>

@@ -1,0 +1,3 @@
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keep class com.savepetti.data.local.** { *; }
