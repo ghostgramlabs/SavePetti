@@ -154,7 +154,6 @@ class SaveSheetViewModel @Inject constructor(
         val ownLocalUri = s.localUri?.let { ingestIfForeign(it) }
         val ownAttachments = s.attachments.map { ingestIfForeign(it) ?: it }
 
-        val tagsCsv = parseTagsToCsv(s.tagsInput)
         val entity = SaveItemEntity(
             title = s.title.ifBlank { "Untitled" },
             url = s.url,
@@ -164,10 +163,11 @@ class SaveSheetViewModel @Inject constructor(
             sourceApp = s.sourceApp.name,
             categoryId = s.selectedCategory,
             notes = s.notes.ifBlank { null },
-            tags = tagsCsv,
             isFavorite = s.isFavorite
         )
         val id = repo.insert(entity)
+        val tagNames = parseTagInput(s.tagsInput)
+        if (tagNames.isNotEmpty()) repo.setTagsForItem(id, tagNames)
 
         val attachmentRows = ownAttachments.mapIndexed { i, uri ->
             AttachmentEntity(
@@ -250,13 +250,11 @@ class SaveSheetViewModel @Inject constructor(
         _state.value = s.copy(isSaved = true)
     }
 
-    private fun parseTagsToCsv(input: String): String? {
-        if (input.isBlank()) return null
+    private fun parseTagInput(input: String): List<String> {
+        if (input.isBlank()) return emptyList()
         return input.split(Regex("[,\\n]+"))
             .map { it.trim().removePrefix("#") }
             .filter { it.isNotBlank() && it.length <= 24 }
             .distinct()
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString(",")
     }
 }

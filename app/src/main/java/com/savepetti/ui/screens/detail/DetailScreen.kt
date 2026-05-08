@@ -93,10 +93,7 @@ fun DetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
-                    scope.launch {
-                        viewModel.deleteWithSnapshot()
-                        onDeleted()
-                    }
+                    viewModel.delete().invokeOnCompletion { onDeleted() }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -296,7 +293,7 @@ fun DetailScreen(
 
                 Spacer(Modifier.height(24.dp))
                 TagsRow(
-                    tagsCsv = item.tags,
+                    tags = state.tags.map { it.name },
                     accent = accent,
                     onAdd = viewModel::addTag,
                     onRemove = viewModel::removeTag
@@ -407,12 +404,11 @@ private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
 
 @Composable
 private fun TagsRow(
-    tagsCsv: String?,
+    tags: List<String>,
     accent: Color,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit
 ) {
-    val tags = tagsCsv?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
     var input by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     Column {
         Text("Tags", style = MaterialTheme.typography.titleMedium)

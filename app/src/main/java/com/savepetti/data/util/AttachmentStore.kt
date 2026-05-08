@@ -43,6 +43,24 @@ class AttachmentStore @Inject constructor(
         }.getOrNull()
     }
 
+    /**
+     * Best-effort cleanup of files we own. Anything not under [baseDir] is
+     * ignored — we never touch URIs outside our sandbox.
+     */
+    suspend fun deleteByUris(uris: List<String>) = withContext(Dispatchers.IO) {
+        for (s in uris) {
+            runCatching {
+                val uri = Uri.parse(s)
+                if (uri.scheme != "file") return@runCatching
+                val path = uri.path ?: return@runCatching
+                val file = File(path)
+                if (file.exists() && file.parentFile?.canonicalPath == baseDir.canonicalPath) {
+                    file.delete()
+                }
+            }
+        }
+    }
+
     private fun guessExtension(uri: Uri): String? {
         val resolver: ContentResolver = ctx.contentResolver
         val mime = resolver.getType(uri)

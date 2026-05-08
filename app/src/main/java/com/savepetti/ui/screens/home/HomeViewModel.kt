@@ -21,7 +21,6 @@ data class HomeState(
     val pinned: List<SaveItemEntity> = emptyList(),
     val favorites: List<SaveItemEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
-    val recentlyOpened: List<SaveItemEntity> = emptyList(),
     val sources: List<SourceCount> = emptyList(),
     val totalCount: Int = 0
 )
@@ -31,29 +30,39 @@ class HomeViewModel @Inject constructor(
     private val repo: SaveRepository
 ) : ViewModel() {
 
+    /**
+     * Each component flow is bounded — recent/pinned/favorites are LIMITed in
+     * SQL, sources comes from a GROUP BY aggregate, total is a COUNT(*). The
+     * home screen never loads the full row set, even at 100k saves.
+     */
     val state: StateFlow<HomeState> = combine(
         repo.observeRecent(20),
         repo.observePinned(),
         repo.observeFavorites(),
         repo.observeCategories(),
-        repo.observeAll()
-    ) { recent, pinned, favs, cats, all ->
-        val sources = all.groupingBy { it.sourceApp }.eachCount()
-            .entries
-            .mapNotNull { (name, count) ->
-                val sa = runCatching { SourceApp.valueOf(name) }.getOrNull() ?: return@mapNotNull null
-                SourceCount(sa.name, sa.emoji, sa.displayName, count)
-            }
-            .sortedByDescending { it.count }
-            .take(8)
+        repo.observeSourceCounts(),
+        repo.observeTotal()
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
+        val recent = args[0] as List<SaveItemEntity>
+        val pinned = args[1] as List<SaveItemEntity>
+        val favs = args[2] as List<SaveItemEntity>
+        val cats = args[3] as List<CategoryEntity>
+        val rawCounts = args[4] as List<com.savepetti.data.local.SourceCount>
+        val total = args[5] as Int
+
+        val sources = rawCounts.mapNotNull { sc ->
+            val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
+            SourceCount(sa.name, sa.emoji, sa.displayName, sc.count)
+        }.take(8)
+
         HomeState(
             recent = recent,
             pinned = pinned,
             favorites = favs,
             categories = cats,
-            recentlyOpened = emptyList(),
             sources = sources,
-            totalCount = all.size
+            totalCount = total
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 

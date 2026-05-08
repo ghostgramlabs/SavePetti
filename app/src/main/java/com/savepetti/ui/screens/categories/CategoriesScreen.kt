@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -85,7 +86,11 @@ fun CategoriesScreen(
                 modifier = Modifier.padding(padding)
             )
         } else {
-            if (state.items.isEmpty()) {
+            val drillItems = viewModel.drillItems.collectAsLazyPagingItems()
+            val isEmpty = drillItems.itemCount == 0 &&
+                drillItems.loadState.refresh is androidx.paging.LoadState.NotLoading
+
+            if (isEmpty) {
                 Column(Modifier.padding(padding).fillMaxSize()) {
                     EmptyState(
                         emoji = "📭",
@@ -102,7 +107,11 @@ fun CategoriesScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(padding).fillMaxSize()
                 ) {
-                    items(state.items, key = { "c-${it.id}" }) { item ->
+                    items(
+                        count = drillItems.itemCount,
+                        key = { idx -> drillItems.peek(idx)?.id ?: idx }
+                    ) { idx ->
+                        val item = drillItems[idx] ?: return@items
                         SaveCard(
                             item = item,
                             accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
