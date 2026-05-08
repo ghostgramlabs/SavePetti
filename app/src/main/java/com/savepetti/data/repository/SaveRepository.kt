@@ -38,6 +38,7 @@ class SaveRepository @Inject constructor(
     suspend fun update(item: SaveItemEntity) = saveDao.update(item)
     suspend fun delete(id: Long) = saveDao.delete(id)
     suspend fun getById(id: Long) = saveDao.getById(id)
+    suspend fun insertWithId(item: SaveItemEntity): Long = saveDao.insert(item)
     fun observeById(id: Long) = saveDao.observeById(id)
 
     fun observeAll(): Flow<List<SaveItemEntity>> = saveDao.observeAll()

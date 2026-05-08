@@ -55,10 +55,30 @@ class DetailViewModel @Inject constructor(
         val it = state.value.item ?: return@launch
         repo.setPinned(it.id, !it.isPinned)
     }
-    fun delete() = viewModelScope.launch {
-        val it = state.value.item ?: return@launch
+    /**
+     * Returns the deleted entity + its attachments so the caller can hold them
+     * in a Snackbar "Undo" handler. Restoration is best-effort: on undo we
+     * insert a fresh row (Room reassigns the id) plus its attachments. This
+     * makes undo robust even after the user navigates away.
+     */
+    suspend fun deleteWithSnapshot(): Snapshot? {
+        val it = state.value.item ?: return null
+        val attachments = repo.attachmentsFor(it.id)
         repo.delete(it.id)
+        return Snapshot(it, attachments)
     }
+
+    suspend fun restore(snapshot: Snapshot) {
+        val newId = repo.insertWithId(snapshot.item.copy(id = 0))
+        if (snapshot.attachments.isNotEmpty()) {
+            repo.insertAttachments(snapshot.attachments.map { it.copy(id = 0, itemId = newId) })
+        }
+    }
+
+    data class Snapshot(
+        val item: SaveItemEntity,
+        val attachments: List<AttachmentEntity>
+    )
     fun setCategory(id: String?) = viewModelScope.launch {
         val it = state.value.item ?: return@launch
         repo.update(it.copy(categoryId = id, updatedAt = System.currentTimeMillis()))

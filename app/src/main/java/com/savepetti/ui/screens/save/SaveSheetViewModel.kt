@@ -3,6 +3,7 @@ package com.savepetti.ui.screens.save
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
 import com.savepetti.data.local.AttachmentEntity
 import com.savepetti.data.local.CategoryEntity
 import com.savepetti.data.local.SaveItemEntity
@@ -10,6 +11,7 @@ import com.savepetti.data.metadata.MetadataFetcher
 import com.savepetti.data.ocr.OcrWorker
 import com.savepetti.data.ocr.PdfTextWorker
 import com.savepetti.data.repository.SaveRepository
+import com.savepetti.data.util.AttachmentStore
 import com.savepetti.data.util.TextUtils
 import com.savepetti.domain.model.ContentType
 import com.savepetti.domain.model.SourceApp
@@ -25,7 +27,10 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
+enum class SaveMode { NEW, PICK_EXISTING }
+
 data class SaveSheetState(
+    val mode: SaveMode = SaveMode.NEW,
     val title: String = "",
     val previewImage: String? = null,
     val description: String? = null,
@@ -39,6 +44,7 @@ data class SaveSheetState(
     val isFavorite: Boolean = false,
     val selectedCategory: String? = null,
     val categories: List<CategoryEntity> = emptyList(),
+    val recentItems: List<SaveItemEntity> = emptyList(),
     val isResolving: Boolean = false,
     val isSaved: Boolean = false
 )
@@ -47,13 +53,16 @@ data class SaveSheetState(
 class SaveSheetViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val metadata: MetadataFetcher,
+    private val attachmentStore: AttachmentStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SaveSheetState())
 
-    val state: StateFlow<SaveSheetState> = combine(_state, repo.observeCategories()) { s, cats ->
-        s.copy(categories = cats)
+    val state: StateFlow<SaveSheetState> = combine(
+        _state, repo.observeCategories(), repo.observeRecent(30)
+    ) { s, cats, recent ->
+        s.copy(categories = cats, recentItems = recent)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), _state.value)
 
     fun ingest(share: IncomingShare) {
@@ -106,6 +115,7 @@ class SaveSheetViewModel @Inject constructor(
         }
     }
 
+    fun setMode(m: SaveMode) = update { it.copy(mode = m) }
     fun setTitle(t: String) = update { it.copy(title = t) }
     fun setNotes(n: String) = update { it.copy(notes = n) }
     fun setTags(t: String) = update { it.copy(tagsInput = t) }
@@ -138,11 +148,17 @@ class SaveSheetViewModel @Inject constructor(
         val s = _state.value
         if (s.title.isBlank() && s.url.isNullOrBlank() && s.localUri.isNullOrBlank()) return@launch
 
+        // Copy any foreign content URIs into our own filesDir so they survive
+        // permission revocation and process death. http(s) URLs and existing
+        // file:// URIs are passed through unchanged.
+        val ownLocalUri = s.localUri?.let { ingestIfForeign(it) }
+        val ownAttachments = s.attachments.map { ingestIfForeign(it) ?: it }
+
         val tagsCsv = parseTagsToCsv(s.tagsInput)
         val entity = SaveItemEntity(
             title = s.title.ifBlank { "Untitled" },
             url = s.url,
-            localUri = s.localUri,
+            localUri = ownLocalUri,
             thumbnailUri = s.previewImage,
             contentType = s.contentType.name,
             sourceApp = s.sourceApp.name,
@@ -153,8 +169,7 @@ class SaveSheetViewModel @Inject constructor(
         )
         val id = repo.insert(entity)
 
-        // Bundle multi-photo / file attachments under the same item
-        val attachmentRows = s.attachments.mapIndexed { i, uri ->
+        val attachmentRows = ownAttachments.mapIndexed { i, uri ->
             AttachmentEntity(
                 itemId = id,
                 uri = uri,
@@ -164,18 +179,72 @@ class SaveSheetViewModel @Inject constructor(
         }
         val attachmentIds = repo.insertAttachments(attachmentRows)
 
-        // Fire-and-forget OCR per attachment, plus parent if it's a single-image save.
         if (s.contentType == ContentType.IMAGE) {
-            if (attachmentRows.isEmpty() && !s.localUri.isNullOrBlank()) {
-                OcrWorker.enqueueForItem(appContext, id, s.localUri)
+            if (attachmentRows.isEmpty() && !ownLocalUri.isNullOrBlank()) {
+                OcrWorker.enqueueForItem(appContext, id, ownLocalUri)
             } else {
                 attachmentRows.zip(attachmentIds).forEach { (row, attId) ->
                     OcrWorker.enqueueForAttachment(appContext, id, attId, row.uri)
                 }
             }
         }
-        if (s.contentType == ContentType.PDF && !s.localUri.isNullOrBlank()) {
-            PdfTextWorker.enqueue(appContext, id, s.localUri)
+        if (s.contentType == ContentType.PDF && !ownLocalUri.isNullOrBlank()) {
+            PdfTextWorker.enqueue(appContext, id, ownLocalUri)
+        }
+
+        _state.value = s.copy(isSaved = true)
+    }
+
+    private suspend fun ingestIfForeign(uriString: String): String? {
+        return runCatching {
+            val uri = Uri.parse(uriString)
+            when (uri.scheme) {
+                "content" -> attachmentStore.ingest(uri) ?: uriString
+                else -> uriString // http, https, file — keep as-is
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * Adds the current share's content as attachments + appended note onto an
+     * existing item, instead of creating a new one. Used by the "Add to
+     * existing" flow on the Save sheet.
+     */
+    fun saveToExisting(targetItemId: Long) = viewModelScope.launch {
+        val s = _state.value
+        val target = repo.getById(targetItemId) ?: return@launch
+
+        val ownLocalUri = s.localUri?.let { ingestIfForeign(it) }
+        val ownAttachments = s.attachments.map { ingestIfForeign(it) ?: it }
+
+        val urisToAttach = buildList {
+            if (s.attachments.isEmpty() && !ownLocalUri.isNullOrBlank()) add(ownLocalUri)
+            else addAll(ownAttachments)
+        }
+
+        val baseSort = (repo.attachmentsFor(target.id).maxOfOrNull { it.sortOrder } ?: -1) + 1
+        val rows = urisToAttach.mapIndexed { i, uri ->
+            AttachmentEntity(
+                itemId = target.id,
+                uri = uri,
+                kind = (if (s.contentType == ContentType.IMAGE) ContentType.IMAGE else s.contentType).name,
+                sortOrder = baseSort + i
+            )
+        }
+        val attIds = repo.insertAttachments(rows)
+
+        // Merge any incoming notes into the existing item.
+        val mergedNotes = listOfNotNull(target.notes, s.notes.ifBlank { null }, s.url)
+            .joinToString("\n\n")
+            .ifBlank { null }
+        if (mergedNotes != target.notes) {
+            repo.update(target.copy(notes = mergedNotes, updatedAt = System.currentTimeMillis()))
+        }
+
+        if (s.contentType == ContentType.IMAGE) {
+            rows.zip(attIds).forEach { (row, id) ->
+                OcrWorker.enqueueForAttachment(appContext, target.id, id, row.uri)
+            }
         }
 
         _state.value = s.copy(isSaved = true)

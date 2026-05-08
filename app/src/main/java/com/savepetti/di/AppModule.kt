@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.savepetti.data.local.AppDatabase
 import com.savepetti.data.local.AttachmentDao
 import com.savepetti.data.local.CategoryDao
+import com.savepetti.data.local.MIGRATION_1_2
 import com.savepetti.data.local.SaveDao
 import dagger.Module
 import dagger.Provides
@@ -20,7 +21,7 @@ object AppModule {
     @Provides @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "savepetti.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_1_2)
             .build()
 
     @Provides fun provideSaveDao(db: AppDatabase): SaveDao = db.saveDao()
