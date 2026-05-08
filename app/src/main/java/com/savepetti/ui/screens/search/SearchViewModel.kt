@@ -110,4 +110,10 @@ class SearchViewModel @Inject constructor(
     fun toggleTag(t: String) {
         _tagFilter.value = if (_tagFilter.value.equals(t, ignoreCase = true)) null else t
     }
+    fun clearFilters() {
+        _sourceFilter.value = null
+        _categoryFilter.value = null
+        _typeFilter.value = null
+        _tagFilter.value = null
+    }
 }

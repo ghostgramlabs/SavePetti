@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun CategoryChip(
     label: String,
-    emoji: String,
+    emoji: String?,
     color: Color,
     selected: Boolean,
     modifier: Modifier = Modifier,
@@ -50,8 +50,10 @@ fun CategoryChip(
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {
-        Text(emoji, style = MaterialTheme.typography.labelLarge)
-        Spacer(Modifier.width(6.dp))
+        if (!emoji.isNullOrBlank()) {
+            Text(emoji, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(6.dp))
+        }
         Text(
             label,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),

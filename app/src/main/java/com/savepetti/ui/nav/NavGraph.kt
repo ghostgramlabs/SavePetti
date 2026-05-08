@@ -1,9 +1,27 @@
 package com.savepetti.ui.nav
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.savepetti.ui.screens.categories.CategoriesScreen
@@ -22,51 +40,117 @@ object Routes {
     fun categories(cid: String? = null) = "categories?cid=${cid.orEmpty()}"
 }
 
+private data class TopTab(
+    val route: String,
+    val baseRoute: String,
+    val label: String,
+    val icon: ImageVector
+)
+
+private val topTabs = listOf(
+    TopTab(Routes.Home, "home", "Home", Icons.Rounded.Home),
+    TopTab(Routes.search(), "search", "Search", Icons.Rounded.Search),
+    TopTab(Routes.categories(), "categories", "Browse", Icons.Rounded.GridView)
+)
+
 @Composable
 fun SavePettiNavGraph() {
     val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = Routes.Home) {
-        composable(Routes.Home) {
-            HomeScreen(
-                onOpenItem = { id -> nav.navigate(Routes.detail(id)) },
-                onOpenSearch = { q -> nav.navigate(Routes.search(q)) },
-                onOpenSource = { src -> nav.navigate(Routes.search(src = src)) },
-                onOpenCategory = { cid -> nav.navigate(Routes.categories(cid)) },
-                onOpenAllCategories = { nav.navigate(Routes.categories()) }
-            )
-        }
-        composable(
-            Routes.Search,
-            arguments = listOf(
-                navArgument("q") { type = NavType.StringType; defaultValue = "" },
-                navArgument("src") { type = NavType.StringType; defaultValue = "" }
-            )
-        ) { entry ->
-            val q = entry.arguments?.getString("q").orEmpty()
-            val src = entry.arguments?.getString("src").orEmpty()
-            SearchScreen(
-                initialQuery = q,
-                initialSource = src.ifBlank { null },
-                onOpenItem = { id -> nav.navigate(Routes.detail(id)) }
-            )
-        }
-        composable(
-            Routes.Detail,
-            arguments = listOf(navArgument("id") { type = NavType.LongType })
+    val backStackEntry by nav.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route.orEmpty()
+    val showBottomBar = topTabs.any { it.matches(currentRoute) }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) BottomNav(nav, currentRoute)
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        NavHost(
+            navController = nav,
+            startDestination = Routes.Home,
+            modifier = Modifier.padding(padding)
         ) {
-            DetailScreen(
-                onBack = { nav.popBackStack() },
-                onDeleted = { nav.popBackStack() }
-            )
+            composable(Routes.Home) {
+                HomeScreen(
+                    onOpenItem = { id -> nav.navigate(Routes.detail(id)) },
+                    onOpenSearch = { q -> nav.navigateTopLevel(Routes.search(q)) },
+                    onOpenSource = { src -> nav.navigate(Routes.search(src = src)) },
+                    onOpenCategory = { cid -> nav.navigate(Routes.categories(cid)) },
+                    onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) }
+                )
+            }
+            composable(
+                Routes.Search,
+                arguments = listOf(
+                    navArgument("q") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("src") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) { entry ->
+                val q = entry.arguments?.getString("q").orEmpty()
+                val src = entry.arguments?.getString("src").orEmpty()
+                SearchScreen(
+                    initialQuery = q,
+                    initialSource = src.ifBlank { null },
+                    onOpenItem = { id -> nav.navigate(Routes.detail(id)) }
+                )
+            }
+            composable(
+                Routes.Detail,
+                arguments = listOf(navArgument("id") { type = NavType.LongType })
+            ) {
+                DetailScreen(
+                    onBack = { nav.popBackStack() },
+                    onDeleted = { nav.popBackStack() }
+                )
+            }
+            composable(
+                Routes.Categories,
+                arguments = listOf(navArgument("cid") { type = NavType.StringType; defaultValue = "" })
+            ) {
+                CategoriesScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenItem = { id -> nav.navigate(Routes.detail(id)) }
+                )
+            }
         }
-        composable(
-            Routes.Categories,
-            arguments = listOf(navArgument("cid") { type = NavType.StringType; defaultValue = "" })
-        ) {
-            CategoriesScreen(
-                onBack = { nav.popBackStack() },
-                onOpenItem = { id -> nav.navigate(Routes.detail(id)) }
+    }
+}
+
+@Composable
+private fun BottomNav(nav: NavHostController, currentRoute: String) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
+    ) {
+        topTabs.forEach { tab ->
+            val selected = tab.matches(currentRoute)
+            NavigationBarItem(
+                selected = selected,
+                onClick = { nav.navigateTopLevel(tab.route) },
+                icon = { androidx.compose.material3.Icon(tab.icon, contentDescription = tab.label) },
+                label = { Text(tab.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
             )
         }
     }
 }
+
+private fun TopTab.matches(route: String): Boolean =
+    route.startsWith(baseRoute)
+
+/** Reset to start destination when switching top-level tabs to avoid a deep stack. */
+private fun NavHostController.navigateTopLevel(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
