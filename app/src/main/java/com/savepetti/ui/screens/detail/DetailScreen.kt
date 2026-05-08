@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -44,23 +46,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import coil.compose.AsyncImage
 import com.savepetti.data.util.TimeFormat
 import com.savepetti.domain.model.SourceApp
 import com.savepetti.ui.components.CategoryChip
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +81,30 @@ fun DetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val item = state.item
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete this save?") },
+            text = { Text("This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    scope.launch {
+                        viewModel.deleteWithSnapshot()
+                        onDeleted()
+                    }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -79,20 +112,28 @@ fun DetailScreen(
             TopAppBar(
                 title = { },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, null) }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                    }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.togglePinned() }) {
+                    IconButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.togglePinned()
+                    }) {
                         Icon(
                             if (item?.isPinned == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                            null,
+                            contentDescription = if (item?.isPinned == true) "Unpin" else "Pin",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = { viewModel.toggleFavorite() }) {
+                    IconButton(onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.toggleFavorite()
+                    }) {
                         Icon(
                             if (item?.isFavorite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            null,
+                            contentDescription = if (item?.isFavorite == true) "Unfavorite" else "Favorite",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -104,9 +145,13 @@ fun DetailScreen(
                             }
                             ctx.startActivity(Intent.createChooser(intent, "Share"))
                         }
-                    }) { Icon(Icons.Rounded.Share, null) }
-                    IconButton(onClick = { viewModel.delete().invokeOnCompletion { onDeleted() } }) {
-                        Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error)
+                    }) { Icon(Icons.Rounded.Share, contentDescription = "Share") }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -262,24 +307,7 @@ fun DetailScreen(
 
                 if (!item.ocrText.isNullOrBlank()) {
                     Spacer(Modifier.height(24.dp))
-                    Text(
-                        "Text from image",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            item.ocrText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    OcrTextSection(text = item.ocrText)
                 }
 
                 Spacer(Modifier.height(48.dp))
@@ -288,10 +316,43 @@ fun DetailScreen(
     }
 }
 
+@Composable
+private fun OcrTextSection(text: String) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Text(
+        "Text from image",
+        style = MaterialTheme.typography.titleMedium
+    )
+    Spacer(Modifier.height(8.dp))
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(16.dp)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (expanded) Int.MAX_VALUE else 6,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+    }
+    if (text.lineSequence().count() > 6 || text.length > 360) {
+        androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "Show less" else "Show all")
+        }
+    }
+}
+
 /**
  * Big-headline title that's tap-to-edit. We use [androidx.compose.foundation.text.BasicTextField]
  * (no Material container) so the visual matches the original [Text] until the
  * user focuses it. Saves on focus loss — avoids spamming the DB on every keystroke.
+ *
+ * A pencil icon hints at editability; a hairline underline appears on focus
+ * so the user has visual confirmation they're typing.
  */
 @Composable
 private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
@@ -299,25 +360,49 @@ private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
         androidx.compose.runtime.mutableStateOf(initial)
     }
     var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.primary
 
-    androidx.compose.foundation.text.BasicTextField(
-        value = value,
-        onValueChange = { value = it },
-        textStyle = MaterialTheme.typography.headlineLarge.copy(
-            fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.onBackground
-        ),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-        modifier = Modifier
-            .fillMaxWidth()
-            .onFocusChanged { fs ->
-                if (focused && !fs.isFocused) {
-                    // commit on blur
-                    if (value != initial) onSave(value)
+    Row(verticalAlignment = Alignment.Top) {
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = { value = it },
+            textStyle = MaterialTheme.typography.headlineLarge.copy(
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onBackground
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(accent),
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+                .let { m ->
+                    // Hairline underline only when focused, so the user knows
+                    // their keystrokes are landing.
+                    if (focused) m.drawBehind {
+                        val y = size.height
+                        drawLine(
+                            color = accent,
+                            start = androidx.compose.ui.geometry.Offset(0f, y),
+                            end = androidx.compose.ui.geometry.Offset(size.width, y),
+                            strokeWidth = 2f
+                        )
+                    } else m
                 }
-                focused = fs.isFocused
-            }
-    )
+                .onFocusChanged { fs ->
+                    if (focused && !fs.isFocused) {
+                        if (value != initial) onSave(value)
+                    }
+                    focused = fs.isFocused
+                }
+        )
+        Icon(
+            imageVector = Icons.Rounded.Edit,
+            contentDescription = "Edit title",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .size(18.dp)
+        )
+    }
 }
 
 @Composable

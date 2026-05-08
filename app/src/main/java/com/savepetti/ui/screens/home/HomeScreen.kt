@@ -89,7 +89,9 @@ fun HomeScreen(
                 EmptyState(
                     emoji = "🪺",
                     headline = "Your shelf is empty",
-                    body = "Share something into SavePetti from any app — links, screenshots, recipes, anything you want to keep for later."
+                    body = "Share something into SavePetti from any app — or tap below to jot a quick note.",
+                    cta = "Add a quick note",
+                    onCta = { showQuickNote = true }
                 )
             }
             return@Scaffold

@@ -20,7 +20,8 @@ import javax.inject.Inject
 data class CategoriesState(
     val selectedId: String? = null,
     val categories: List<CategoryEntity> = emptyList(),
-    val items: List<SaveItemEntity> = emptyList()
+    val items: List<SaveItemEntity> = emptyList(),
+    val countsByCategory: Map<String, Int> = emptyMap()
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,9 +43,18 @@ class CategoriesViewModel @Inject constructor(
     }
 
     val state: StateFlow<CategoriesState> = combine(
-        _selected, repo.observeCategories(), items
-    ) { sel, cats, list -> CategoriesState(sel, cats, list) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CategoriesState())
+        _selected, repo.observeCategories(), items, repo.observeAll()
+    ) { sel, cats, list, all ->
+        val counts = all.groupingBy { it.categoryId.orEmpty() }
+            .eachCount()
+            .filterKeys { it.isNotEmpty() }
+        CategoriesState(
+            selectedId = sel,
+            categories = cats,
+            items = list,
+            countsByCategory = counts
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CategoriesState())
 
     fun select(id: String?) { _selected.value = id }
 }

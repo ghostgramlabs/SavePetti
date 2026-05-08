@@ -27,6 +27,8 @@ fun EmptyState(
     headline: String,
     body: String,
     accent: Color = MaterialTheme.colorScheme.primary,
+    cta: String? = null,
+    onCta: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -58,5 +60,18 @@ fun EmptyState(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+        if (cta != null && onCta != null) {
+            Spacer(Modifier.height(20.dp))
+            androidx.compose.material3.Button(
+                onClick = onCta,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = androidx.compose.ui.graphics.Color.White
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+            ) {
+                Text(cta, style = MaterialTheme.typography.labelLarge)
+            }
+        }
     }
 }

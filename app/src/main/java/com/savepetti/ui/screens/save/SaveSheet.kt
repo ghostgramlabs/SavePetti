@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -45,9 +46,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
@@ -74,8 +79,19 @@ fun SaveSheet(
     val scope = rememberCoroutineScope()
     var showCreate by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
+    val titleFocus = remember { FocusRequester() }
+    val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) { viewModel.ingest(incoming) }
+    // Auto-focus the title once metadata resolution settles. We wait a tick
+    // so the bottom sheet finishes its enter animation before the keyboard
+    // pops up — otherwise it can wedge mid-animation.
+    LaunchedEffect(state.isResolving, state.title.isNotBlank()) {
+        if (!state.isResolving) {
+            kotlinx.coroutines.delay(180)
+            runCatching { titleFocus.requestFocus() }
+        }
+    }
     LaunchedEffect(state.isSaved) {
         if (state.isSaved) {
             // System-level confirmation in case the in-sheet animation gets cut off
@@ -115,6 +131,15 @@ fun SaveSheet(
     ) {
         if (state.isSaved) {
             SuccessPanel()
+            return@ModalBottomSheet
+        }
+        if (state.mode == SaveMode.PICK_EXISTING) {
+            PickExistingBody(
+                items = state.recentItems,
+                categories = state.categories,
+                onPick = { id -> viewModel.saveToExisting(id) },
+                onCancel = { viewModel.setMode(SaveMode.NEW) }
+            )
             return@ModalBottomSheet
         }
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
@@ -177,7 +202,9 @@ fun SaveSheet(
                     unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
                 ),
                 shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(titleFocus)
             )
 
             if (!state.description.isNullOrBlank()) {
@@ -236,10 +263,13 @@ fun SaveSheet(
 
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { viewModel.toggleFavorite() }) {
+                IconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.toggleFavorite()
+                }) {
                     Icon(
                         if (state.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        null,
+                        contentDescription = if (state.isFavorite) "Unfavorite" else "Favorite",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(28.dp)
                     )
@@ -251,7 +281,10 @@ fun SaveSheet(
                 )
                 Spacer(Modifier.weight(1f))
                 Button(
-                    onClick = { viewModel.save() },
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.save()
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -261,7 +294,87 @@ fun SaveSheet(
                     Text("Save it", fontWeight = FontWeight.Bold)
                 }
             }
+
+            if (state.recentItems.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
+                ) {
+                    Text(
+                        "or add to an existing save →",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun PickExistingBody(
+    items: List<com.savepetti.data.local.SaveItemEntity>,
+    categories: List<com.savepetti.data.local.CategoryEntity>,
+    onPick: (Long) -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Add to which save?",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f)
+            )
+            androidx.compose.material3.TextButton(onClick = onCancel) { Text("Back") }
+        }
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(items, key = { it.id }) { item ->
+                val cat = categories.firstOrNull { it.id == item.categoryId }
+                PickRow(
+                    title = item.title,
+                    subtitle = listOfNotNull(cat?.let { "${it.emoji} ${it.name}" }, item.url).joinToString(" · ").take(80),
+                    onClick = { onPick(item.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(title: String, subtitle: String, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.surface)
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface,
+                maxLines = 1
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+        Text("→", style = MaterialTheme.typography.titleMedium, color = scheme.primary)
     }
 }
 

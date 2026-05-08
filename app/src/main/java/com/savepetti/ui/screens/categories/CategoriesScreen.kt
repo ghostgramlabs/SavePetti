@@ -69,7 +69,7 @@ fun CategoriesScreen(
                 navigationIcon = {
                     IconButton(onClick = {
                         if (state.selectedId != null) viewModel.select(null) else onBack()
-                    }) { Icon(Icons.Rounded.ArrowBack, null) }
+                    }) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Back") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -80,6 +80,7 @@ fun CategoriesScreen(
         if (state.selectedId == null) {
             CategoryGrid(
                 categories = state.categories,
+                counts = state.countsByCategory,
                 onSelect = viewModel::select,
                 modifier = Modifier.padding(padding)
             )
@@ -119,6 +120,7 @@ fun CategoriesScreen(
 @Composable
 private fun CategoryGrid(
     categories: List<CategoryEntity>,
+    counts: Map<String, Int>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -130,13 +132,17 @@ private fun CategoryGrid(
         modifier = modifier.fillMaxSize()
     ) {
         items(categories, key = { it.id }) { c ->
-            CategoryTile(c, onClick = { onSelect(c.id) })
+            CategoryTile(
+                c = c,
+                count = counts[c.id] ?: 0,
+                onClick = { onSelect(c.id) }
+            )
         }
     }
 }
 
 @Composable
-private fun CategoryTile(c: CategoryEntity, onClick: () -> Unit) {
+private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
     val color = Color(c.colorHex)
     Column(
         Modifier
@@ -155,10 +161,17 @@ private fun CategoryTile(c: CategoryEntity, onClick: () -> Unit) {
                 .background(color),
             contentAlignment = Alignment.Center
         ) { Text(c.emoji, style = MaterialTheme.typography.titleLarge) }
-        Text(
-            c.name,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column {
+            Text(
+                c.name,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                if (count == 0) "Empty" else "$count item${if (count == 1) "" else "s"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
