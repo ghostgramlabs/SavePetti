@@ -158,7 +158,7 @@ fun CreateCollectionDialog(
                     containerColor = color,
                     contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(50)
+                shape = RoundedCornerShape(12.dp)
             ) { Text("Create", fontWeight = FontWeight.Bold) }
         },
         dismissButton = {

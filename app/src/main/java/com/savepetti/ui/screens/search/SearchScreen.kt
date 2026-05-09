@@ -81,7 +81,7 @@ fun SearchScreen(
             onDismissRequest = { showFilters = false },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.background,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
             FilterSheetBody(
                 state = state,
@@ -95,7 +95,7 @@ fun SearchScreen(
         }
     }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+    Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Spacer(Modifier.height(4.dp))
             SearchField(
@@ -238,7 +238,7 @@ private fun FilterToolbar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(50))
+                .clip(RoundedCornerShape(12.dp))
                 .background(
                     if (activeFilterCount > 0) scheme.primary.copy(alpha = 0.14f)
                     else scheme.surface
@@ -246,7 +246,7 @@ private fun FilterToolbar(
                 .border(
                     width = 1.5.dp,
                     color = if (activeFilterCount > 0) scheme.primary else scheme.outline,
-                    shape = RoundedCornerShape(50)
+                    shape = RoundedCornerShape(12.dp)
                 )
                 .clickable(onClick = onOpen)
                 .padding(horizontal = 14.dp, vertical = 9.dp)
@@ -305,7 +305,7 @@ private fun ActivePill(label: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
+            .clip(RoundedCornerShape(12.dp))
             .background(scheme.primary.copy(alpha = 0.12f))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)

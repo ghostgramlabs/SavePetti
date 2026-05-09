@@ -6,10 +6,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// We pair a friendly display weight (heavy, slightly tracked-in) with a
-// readable body. Using system FontFamily keeps the APK small; weights and
-// letter-spacing carry the personality.
-private val Display = FontFamily.SansSerif
+// Display = system serif (Noto Serif on most Android builds). Pairing a
+// quiet serif headline with a sans body is the signature most "indie /
+// designed-by-a-person" apps land on (Bear, Things, Stash) — it instantly
+// removes the "stock Material" feel without needing a bundled font asset.
+// Body stays sans for legibility at small sizes.
+private val Display = FontFamily.Serif
 private val Body = FontFamily.SansSerif
 
 val SavePettiTypography = Typography(

@@ -1,5 +1,11 @@
 package com.savepetti.ui.screens.home
 
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.RepeatMode
@@ -16,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,14 +36,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,8 +62,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,25 +90,96 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var showQuickNote by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
-    if (showQuickNote) {
+    // Routing state for the manual-add flow. The chooser sheet sets one of
+    // these; SaveSheet renders when [pendingShare] is non-null.
+    var showChooser by remember { mutableStateOf(false) }
+    var showLinkDialog by remember { mutableStateOf(false) }
+    var pendingShare by remember { mutableStateOf<IncomingShare?>(null) }
+
+    val pickImages = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            pendingShare = IncomingShare(imageUris = uris, mimeType = "image/*")
+        }
+    }
+    val pickFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            // Take a persistable read grant so SaveSheet can ingest the file
+            // even if the user navigates away first.
+            runCatching {
+                ctx.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            val mime = ctx.contentResolver.getType(uri)
+            pendingShare = IncomingShare(fileUris = listOf(uri), mimeType = mime)
+        }
+    }
+
+    val openQuickNote = { pendingShare = IncomingShare() }
+
+    pendingShare?.let { share ->
         SaveSheet(
-            incoming = IncomingShare(),
-            onDismiss = { showQuickNote = false },
-            onSaved = { showQuickNote = false }
+            incoming = share,
+            onDismiss = { pendingShare = null },
+            onSaved = { pendingShare = null }
+        )
+    }
+
+    if (showChooser) {
+        AddChooserSheet(
+            onDismiss = { showChooser = false },
+            onPickNote = {
+                showChooser = false
+                openQuickNote()
+            },
+            onPickLink = {
+                showChooser = false
+                showLinkDialog = true
+            },
+            onPickImage = {
+                showChooser = false
+                pickImages.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onPickFile = {
+                showChooser = false
+                pickFile.launch(arrayOf("*/*"))
+            }
+        )
+    }
+
+    if (showLinkDialog) {
+        AddLinkDialog(
+            initial = clipboardUrl(ctx).orEmpty(),
+            onDismiss = { showLinkDialog = false },
+            onConfirm = { url ->
+                showLinkDialog = false
+                pendingShare = IncomingShare(
+                    text = url,
+                    urls = listOf(url),
+                    mimeType = "text/plain"
+                )
+            }
         )
     }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showQuickNote = true },
+                onClick = { showChooser = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(50)
-            ) { Icon(Icons.Rounded.Add, contentDescription = "New note") }
+                shape = RoundedCornerShape(14.dp)
+            ) { Icon(Icons.Rounded.Add, contentDescription = "Add to shelf") }
         }
     ) { padding ->
         if (state.isLoading) {
@@ -109,7 +199,7 @@ fun HomeScreen(
             Column(Modifier.padding(padding).fillMaxSize()) {
                 Greeting()
                 FirstRunGuide(
-                    onAddNote = { showQuickNote = true },
+                    onAddNote = openQuickNote,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Spacer(Modifier.height(10.dp))
@@ -118,7 +208,7 @@ fun HomeScreen(
                     headline = "Your shelf is empty",
                     body = "Share something into SavePetti from any app - or tap below to jot a quick note.",
                     cta = "Add a quick note",
-                    onCta = { showQuickNote = true },
+                    onCta = openQuickNote,
                     fillScreen = false
                 )
             }
@@ -185,7 +275,13 @@ fun HomeScreen(
             }
 
             items(state.pinned, key = { "p-${it.id}" }) { item ->
-                CardForItem(item, state.categories, onOpenItem)
+                // Pinned items get a small alternating tilt so the row of
+                // bookmarked things visually pops out of the otherwise
+                // grid-aligned recents below it.
+                val tilt = if (item.id % 2L == 0L) -0.9f else 1.1f
+                Box(Modifier.rotate(tilt)) {
+                    CardForItem(item, state.categories, onOpenItem)
+                }
             }
 
             if (state.recent.isNotEmpty()) {
@@ -242,7 +338,7 @@ private fun IndexingStatusChip(modifier: Modifier = Modifier) {
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(RoundedCornerShape(14.dp))
             .background(scheme.primary.copy(alpha = 0.11f))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -274,7 +370,7 @@ private fun FirstRunGuide(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(scheme.surface)
             .padding(16.dp)
     ) {
@@ -304,7 +400,7 @@ private fun FirstRunGuide(
         Spacer(Modifier.height(14.dp))
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(50))
+                .clip(RoundedCornerShape(14.dp))
                 .background(scheme.primary)
                 .clickable(onClick = onAddNote)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -368,11 +464,6 @@ private fun Greeting() {
         verticalAlignment = Alignment.Top
     ) {
         Column(Modifier.weight(1f)) {
-            Text(
-                "Hey there \uD83D\uDC4B",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Text(
                 "What's on the shelf?",
                 style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
@@ -463,4 +554,169 @@ private fun CardForItem(
         categoryName = cat?.name,
         onClick = { onOpen(item.id) }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddChooserSheet(
+    onDismiss: () -> Unit,
+    onPickNote: () -> Unit,
+    onPickLink: () -> Unit,
+    onPickImage: () -> Unit,
+    onPickFile: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                "Add to your shelf",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Pick what you're saving.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+            ChooserRow(
+                icon = Icons.Rounded.EditNote,
+                title = "Note",
+                subtitle = "Jot a quick thought",
+                onClick = onPickNote
+            )
+            Spacer(Modifier.height(8.dp))
+            ChooserRow(
+                icon = Icons.Rounded.Link,
+                title = "Link",
+                subtitle = "Paste a URL — we'll fetch the title",
+                onClick = onPickLink
+            )
+            Spacer(Modifier.height(8.dp))
+            ChooserRow(
+                icon = Icons.Rounded.Image,
+                title = "Picture",
+                subtitle = "From your gallery",
+                onClick = onPickImage
+            )
+            Spacer(Modifier.height(8.dp))
+            ChooserRow(
+                icon = Icons.Rounded.AttachFile,
+                title = "File",
+                subtitle = "PDF, document, anything",
+                onClick = onPickFile
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChooserRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(scheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp)
+    ) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(scheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddLinkDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var text by remember { mutableStateOf(initial) }
+    val trimmed = text.trim()
+    val isValid = trimmed.startsWith("http://", ignoreCase = true) ||
+        trimmed.startsWith("https://", ignoreCase = true)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save a link") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("https://...") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (initial.isNotBlank() && initial == text) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Pulled from your clipboard.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(trimmed) },
+                enabled = isValid
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+private fun clipboardUrl(ctx: Context): String? {
+    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+    val text = runCatching {
+        cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
+    }.getOrNull()?.trim().orEmpty()
+    if (text.isBlank()) return null
+    val starts = text.startsWith("http://", ignoreCase = true) ||
+        text.startsWith("https://", ignoreCase = true)
+    return if (starts) text else null
 }

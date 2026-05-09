@@ -82,7 +82,6 @@ import com.savepetti.data.util.TimeFormat
 import com.savepetti.domain.model.ContentType
 import com.savepetti.domain.model.SourceApp
 import com.savepetti.ui.components.CategoryChip
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -101,6 +100,32 @@ fun DetailScreen(
     val haptics = LocalHapticFeedback.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
+    // Per-attachment delete is two-stage: a confirm dialog, then an
+    // optimistic hide + Undo snackbar. We commit the actual repo delete
+    // only after the snackbar dismisses without Undo, so files survive
+    // long enough to restore.
+    var attachmentDeleteCandidate by remember { mutableStateOf<Long?>(null) }
+    var hiddenAttachmentIds by remember { mutableStateOf(emptySet<Long>()) }
+
+    val requestAttachmentDelete: (Long) -> Unit = { id ->
+        attachmentDeleteCandidate = id
+    }
+    val confirmAttachmentDelete: (Long) -> Unit = { id ->
+        attachmentDeleteCandidate = null
+        hiddenAttachmentIds = hiddenAttachmentIds + id
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "Item removed",
+                actionLabel = "Undo"
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                hiddenAttachmentIds = hiddenAttachmentIds - id
+            } else {
+                hiddenAttachmentIds = hiddenAttachmentIds - id
+                viewModel.deleteAttachment(id)
+            }
+        }
+    }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -111,14 +136,7 @@ fun DetailScreen(
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "Save will be deleted",
-                            actionLabel = "Undo",
-                            withDismissAction = true
-                        )
-                        if (result != androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                            viewModel.delete().invokeOnCompletion { onDeleted() }
-                        }
+                        viewModel.delete().invokeOnCompletion { onDeleted() }
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
@@ -129,8 +147,25 @@ fun DetailScreen(
         )
     }
 
+    attachmentDeleteCandidate?.let { id ->
+        AlertDialog(
+            onDismissRequest = { attachmentDeleteCandidate = null },
+            title = { Text("Remove this item?") },
+            text = { Text("You can undo right after.") },
+            confirmButton = {
+                TextButton(onClick = { confirmAttachmentDelete(id) }) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { attachmentDeleteCandidate = null }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -183,7 +218,7 @@ fun DetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent
                 )
             )
         }
@@ -204,8 +239,10 @@ fun DetailScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // Big preview: horizontal scroll if there are multiple attachments,
-            // single hero otherwise.
-            val gallery: List<GalleryItem> = state.attachments.map { it.toGalleryItem() }
+            // single hero otherwise. Attachments awaiting Undo are filtered
+            // out so the user perceives them as removed immediately.
+            val visibleAttachments = state.attachments.filter { it.id !in hiddenAttachmentIds }
+            val gallery: List<GalleryItem> = visibleAttachments.map { it.toGalleryItem() }
                 .ifEmpty {
                     listOfNotNull(item.thumbnailUri ?: item.localUri).map {
                         GalleryItem(uri = it, kind = item.contentType)
@@ -227,9 +264,7 @@ fun DetailScreen(
                     },
                     onDelete = { galleryItem ->
                         val id = galleryItem.attachmentId ?: return@AttachmentViewerDialog
-                        requestAttachmentDelete(snackbarHostState, scope) {
-                            viewModel.deleteAttachment(id)
-                        }
+                        requestAttachmentDelete(id)
                     }
                 )
             }
@@ -252,9 +287,7 @@ fun DetailScreen(
                             },
                             onDelete = {
                                 val id = galleryItem.attachmentId ?: return@AttachmentPreview
-                                requestAttachmentDelete(snackbarHostState, scope) {
-                                    viewModel.deleteAttachment(id)
-                                }
+                                requestAttachmentDelete(id)
                             },
                             modifier = Modifier
                                 .fillParentMaxWidth(0.85f)
@@ -275,9 +308,7 @@ fun DetailScreen(
                     },
                     onDelete = {
                         val id = gallery.first().attachmentId ?: return@AttachmentPreview
-                        requestAttachmentDelete(snackbarHostState, scope) {
-                            viewModel.deleteAttachment(id)
-                        }
+                        requestAttachmentDelete(id)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -290,7 +321,7 @@ fun DetailScreen(
                         .fillMaxWidth()
                         .height(180.dp)
                         .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(accent.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -326,7 +357,7 @@ fun DetailScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(accent.copy(alpha = 0.14f))
                             .clickable {
                                 val i = Intent(Intent.ACTION_VIEW, item.url.toUri())
@@ -500,24 +531,6 @@ private fun AttachmentViewerDialog(
     }
 }
 
-private fun requestAttachmentDelete(
-    snackbarHostState: SnackbarHostState,
-    scope: CoroutineScope,
-    onDelete: () -> Unit
-) {
-    scope.launch {
-        val result = snackbarHostState.showSnackbar(
-            message = "Item will be removed",
-            actionLabel = "Undo",
-            withDismissAction = true
-        )
-        if (result != SnackbarResult.ActionPerformed) {
-            onDelete()
-            snackbarHostState.showSnackbar("Item removed")
-        }
-    }
-}
-
 @Composable
 private fun AttachmentPreview(
     galleryItem: GalleryItem,
@@ -551,7 +564,7 @@ private fun AttachmentPreview(
             IconButton(
                 onClick = onShare,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(scheme.surface.copy(alpha = 0.92f))
                     .size(40.dp)
             ) {
@@ -561,7 +574,7 @@ private fun AttachmentPreview(
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(scheme.surface.copy(alpha = 0.92f))
                         .size(40.dp)
                 ) {
@@ -736,7 +749,7 @@ private fun TagsRow(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(accent.copy(alpha = 0.14f))
                             .clickable { onRemove(tag) }
                             .padding(horizontal = 10.dp, vertical = 6.dp)

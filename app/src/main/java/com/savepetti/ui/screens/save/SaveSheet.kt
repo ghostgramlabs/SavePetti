@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
@@ -79,7 +80,7 @@ fun SaveSheet(
     viewModel: SaveSheetViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scope = rememberCoroutineScope()
     var showCreate by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -116,7 +117,7 @@ fun SaveSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         dragHandle = {
             Box(
                 Modifier
@@ -144,7 +145,12 @@ fun SaveSheet(
         // Scrollable upper area + sticky action bar at the bottom. Without
         // this split, the keyboard reduces the sheet's available height to a
         // sliver and the Save button falls below the visible region.
-        Column(Modifier.fillMaxWidth().imePadding()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.88f)
+                .imePadding()
+        ) {
         Column(
             Modifier
                 .weight(1f, fill = false)
@@ -163,7 +169,7 @@ fun SaveSheet(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(10.dp))
 
             // Preview
             if (state.attachments.size > 1) {
@@ -190,7 +196,7 @@ fun SaveSheet(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
+                            .height(132.dp)
                             .clip(RoundedCornerShape(20.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     )
@@ -218,7 +224,7 @@ fun SaveSheet(
             }
 
             // Primary action: pick a collection.
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 "Save to",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -235,7 +241,13 @@ fun SaveSheet(
                         emoji = c.emoji,
                         color = Color(c.colorHex),
                         selected = state.selectedCategory == c.id,
-                        onClick = { viewModel.selectCategory(c.id) }
+                        // Stash flow: tapping a collection IS the save.
+                        // The bottom-bar Save button is a fallback for
+                        // saves the user wants to keep uncategorized.
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.saveToCategory(c.id)
+                        }
                     )
                 }
                 item {
@@ -297,18 +309,24 @@ fun SaveSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.weight(1f))
+            // No-collection fallback. Picking a collection above already
+            // saves; this button exists for the rare "just stash it
+            // somewhere unsorted" case.
             Button(
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.save()
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                shape = RoundedCornerShape(50)
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Save it", fontWeight = FontWeight.Bold)
+                Text(
+                    if (state.selectedCategory == null) "Save without collection" else "Save",
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
         }

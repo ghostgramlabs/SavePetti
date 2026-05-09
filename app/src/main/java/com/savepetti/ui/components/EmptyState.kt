@@ -70,7 +70,7 @@ fun EmptyState(
                     containerColor = accent,
                     contentColor = androidx.compose.ui.graphics.Color.White
                 ),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
             ) {
                 Text(cta, style = MaterialTheme.typography.labelLarge)
             }

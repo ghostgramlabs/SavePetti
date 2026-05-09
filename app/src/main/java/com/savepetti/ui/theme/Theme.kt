@@ -2,60 +2,62 @@
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.savepetti.data.preferences.ThemeMode
 
+// Persimmon on Bone in light, Persimmon on warm-charcoal in dark. Containers
+// stay in the same washed family so nothing in the app shouts.
 private val LightColors = lightColorScheme(
-    primary = Coral,
-    onPrimary = Cream,
-    primaryContainer = Peach,
-    onPrimaryContainer = Ink,
-    secondary = WatchPlum,
-    onSecondary = Cream,
+    primary = Persimmon,
+    onPrimary = Bone,
+    primaryContainer = PersimmonWash,
+    onPrimaryContainer = Soot,
+    secondary = Mauve,
+    onSecondary = Bone,
     secondaryContainer = Butter,
-    onSecondaryContainer = Ink,
-    tertiary = TravelTeal,
-    onTertiary = Cream,
-    background = Cream,
-    onBackground = Ink,
-    surface = Surface,
-    onSurface = Ink,
+    onSecondaryContainer = Soot,
+    tertiary = SeaGlass,
+    onTertiary = Soot,
+    background = Bone,
+    onBackground = Soot,
+    surface = PaperOff,
+    onSurface = Soot,
     surfaceVariant = SurfaceTint,
-    onSurfaceVariant = InkSoft,
-    outline = Outline,
-    outlineVariant = CreamDeep,
-    error = CoralDeep,
-    onError = Cream
+    onSurfaceVariant = Gravel,
+    outline = PaperEdge,
+    outlineVariant = SurfaceTint,
+    error = PersimmonDeep,
+    onError = Bone
 )
 
-// Used only inside the dark scheme; declared here so we don't pollute Color.kt
-private val Color_InkMutedDark = androidx.compose.ui.graphics.Color(0xFFC2B79F)
-
 private val DarkColors = darkColorScheme(
-    primary = Coral,
+    primary = Persimmon,
     onPrimary = InkDark,
-    primaryContainer = CoralDeep,
+    primaryContainer = PersimmonDeep,
     onPrimaryContainer = CreamOnDark,
-    secondary = WatchPlum,
+    secondary = Mauve,
     onSecondary = CreamOnDark,
-    tertiary = TravelTeal,
+    tertiary = SeaGlass,
     onTertiary = InkDark,
     background = InkDark,
     onBackground = CreamOnDark,
     surface = SurfaceDark,
     onSurface = CreamOnDark,
     surfaceVariant = SurfaceTintDark,
-    onSurfaceVariant = Color_InkMutedDark,
+    onSurfaceVariant = Pebble,
     outline = OutlineDark,
     outlineVariant = SurfaceTintDark,
-    error = CoralDeep,
+    error = PersimmonDeep,
     onError = CreamOnDark
 )
 
@@ -89,7 +91,17 @@ fun SavePettiTheme(
     MaterialTheme(
         colorScheme = colors,
         typography = SavePettiTypography,
-        shapes = SavePettiShapes,
-        content = content
-    )
+        shapes = SavePettiShapes
+    ) {
+        // App-wide paper texture sits beneath everything. Screens should
+        // use Color.Transparent for their Scaffold containerColor so the
+        // bone + grain shows through.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .paperTexture(colors.background)
+        ) {
+            content()
+        }
+    }
 }

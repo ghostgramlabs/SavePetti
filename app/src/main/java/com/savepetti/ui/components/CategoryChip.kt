@@ -42,11 +42,11 @@ fun CategoryChip(
         horizontalArrangement = Arrangement.Center,
         modifier = modifier
             .rotate(tilt)
-            .background(bg, RoundedCornerShape(50))
+            .background(bg, RoundedCornerShape(12.dp))
             .border(
                 width = if (selected) 0.dp else 1.dp,
                 color = color.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(50)
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 9.dp)
@@ -57,7 +57,7 @@ fun CategoryChip(
                     .size(34.dp)
                     .background(
                         if (selected) Color.White.copy(alpha = 0.18f) else color.copy(alpha = 0.2f),
-                        RoundedCornerShape(50)
+                        RoundedCornerShape(12.dp)
                     ),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -63,7 +64,7 @@ fun SettingsScreen(
     val autoScanOcr by viewModel.autoScanOcr.collectAsStateWithLifecycle(initialValue = true)
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
@@ -148,11 +149,10 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         scope.launch {
-                            snackbarHostState.showSnackbar("Scanning existing saves for search")
                             val count = viewModel.scanExistingSaves()
                             snackbarHostState.showSnackbar(
                                 if (count == 0) "No older images or PDFs need scanning"
-                                else "Queued $count item${if (count == 1) "" else "s"} for text recognition"
+                                else "Scanning existing saves for search: queued $count item${if (count == 1) "" else "s"}"
                             )
                         }
                     },
@@ -185,7 +185,7 @@ fun SettingsScreen(
                                 }
                         }
                     },
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -193,6 +193,7 @@ fun SettingsScreen(
                     Text("Export backup file", fontWeight = FontWeight.Bold)
                 }
             }
+            Spacer(Modifier.height(16.dp).navigationBarsPadding())
         }
     }
 }
@@ -205,7 +206,7 @@ private fun SettingsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp)
     ) {

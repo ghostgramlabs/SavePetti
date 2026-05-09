@@ -37,9 +37,9 @@ fun SearchPill(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(scheme.surface)
-            .border(1.5.dp, scheme.outline, RoundedCornerShape(28.dp))
+            .border(1.5.dp, scheme.outline, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp)
     ) {

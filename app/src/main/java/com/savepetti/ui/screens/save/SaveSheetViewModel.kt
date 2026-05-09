@@ -127,6 +127,17 @@ class SaveSheetViewModel @Inject constructor(
         it.copy(selectedCategory = if (it.selectedCategory == id) null else id)
     }
 
+    /**
+     * Stash-style one-tap save: picking a collection both selects it and
+     * commits the save. The user opened the share sheet to save something —
+     * making them pick a collection AND then hit a Save button is one tap
+     * too many.
+     */
+    fun saveToCategory(id: String) {
+        _state.value = _state.value.copy(selectedCategory = id)
+        save()
+    }
+
     fun createCollection(nc: NewCollection) = viewModelScope.launch {
         val id = "user_" + UUID.randomUUID().toString().take(8)
         val maxOrder = (_state.value.categories.maxOfOrNull { it.sortOrder } ?: 0) + 1
@@ -140,7 +151,10 @@ class SaveSheetViewModel @Inject constructor(
                 userCreated = true
             )
         )
-        update { it.copy(selectedCategory = id) }
+        // Same one-tap intent: if the user just made a collection during a
+        // save flow, they almost certainly want to save into it now.
+        _state.value = _state.value.copy(selectedCategory = id)
+        save()
     }
 
     private fun update(block: (SaveSheetState) -> SaveSheetState) {

@@ -3,6 +3,7 @@ package com.savepetti.ui.nav
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
@@ -75,12 +76,12 @@ fun SavePettiNavGraph(
         bottomBar = {
             if (showBottomBar) BottomNav(nav, currentRoute)
         },
-        containerColor = MaterialTheme.colorScheme.background
-    ) {
+        containerColor = androidx.compose.ui.graphics.Color.Transparent
+    ) { padding ->
         NavHost(
             navController = nav,
             startDestination = Routes.Home,
-            modifier = Modifier
+            modifier = Modifier.padding(padding)
         ) {
             composable(Routes.Home) {
                 HomeScreen(

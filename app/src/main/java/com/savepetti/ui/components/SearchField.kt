@@ -39,9 +39,9 @@ fun SearchField(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(scheme.surface)
-            .border(1.5.dp, scheme.outline, RoundedCornerShape(28.dp))
+            .border(1.5.dp, scheme.outline, RoundedCornerShape(14.dp))
             .padding(horizontal = 18.dp)
     ) {
         Icon(Icons.Rounded.Search, null, tint = scheme.primary)
@@ -69,7 +69,7 @@ fun SearchField(
                 tint = scheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(start = 8.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable(onClick = onClear)
                     .padding(4.dp)
             )
