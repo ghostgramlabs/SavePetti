@@ -166,6 +166,7 @@ fun DetailScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -389,11 +390,16 @@ fun DetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.categories, key = { it.id }) { c ->
+                        // Same hand-arranged feel as the Home strip — alternating
+                        // tilt by sortOrder so a category leans the same way
+                        // every time you see it.
+                        val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
                         CategoryChip(
                             label = c.name,
                             emoji = c.emoji,
                             color = Color(c.colorHex),
                             selected = item.categoryId == c.id,
+                            tilt = tilt,
                             onClick = {
                                 viewModel.setCategory(if (item.categoryId == c.id) null else c.id)
                             }

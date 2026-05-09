@@ -231,8 +231,10 @@ private fun StickyNoteCard(
     modifier: Modifier
 ) {
     val tint = stickyTintFor(item.id)
-    val tilt = if (item.id % 2L == 0L) -1.2f else 1.2f
-    Box(modifier = modifier.fillMaxWidth().rotate(tilt)) {
+    // No card-level tilt: the pastel tint + no-border treatment + footer
+    // stamp already say "sticky note." Tilted serif body in a small
+    // staggered cell was hurting readability without adding meaning.
+    Box(modifier = modifier.fillMaxWidth()) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -252,11 +254,13 @@ private fun StickyNoteCard(
             )
             if (!item.notes.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
+                // Capped at 3 lines (was 6) — long previews on a tinted
+                // small card become a wall of text with bad scan affordance.
                 Text(
                     item.notes,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF2A231C).copy(alpha = 0.78f),
-                    maxLines = 6
+                    maxLines = 3
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -406,9 +410,10 @@ private fun FooterMeta(
 }
 
 /**
- * Rubber-stamp treatment of the source app: tilted, monospaced, ink-color
- * border and label. Acts as a recurring "postmark" motif across the grid
- * and turns what was a plain emoji into a piece of visual rhythm.
+ * Rubber-stamp treatment of the source app: tilted, monospaced, dark-ink
+ * label inside a category-tinted border. The label uses [onSurface] so the
+ * text reads against any hero (photo, accent block, sticky-note tint) —
+ * accent-tinted text was failing contrast on the paler categories.
  */
 @Composable
 private fun SourceStamp(
@@ -417,12 +422,13 @@ private fun SourceStamp(
     modifier: Modifier = Modifier
 ) {
     if (source == SourceApp.UNKNOWN) return
+    val label = MaterialTheme.colorScheme.onSurface
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .rotate(-7f)
-            .border(1.2.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
-            .background(accent.copy(alpha = 0.06f), RoundedCornerShape(3.dp))
+            .border(1.2.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
+            .background(accent.copy(alpha = 0.08f), RoundedCornerShape(3.dp))
             .padding(horizontal = 5.dp, vertical = 1.dp)
     ) {
         Text(source.emoji, style = MaterialTheme.typography.labelSmall)
@@ -435,7 +441,7 @@ private fun SourceStamp(
                 fontWeight = FontWeight.Bold,
                 fontSize = 9.sp
             ),
-            color = accent.copy(alpha = 0.78f)
+            color = label.copy(alpha = 0.72f)
         )
     }
 }

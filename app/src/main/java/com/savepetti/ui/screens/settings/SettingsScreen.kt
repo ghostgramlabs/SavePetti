@@ -49,6 +49,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.savepetti.data.preferences.ThemeMode
+import com.savepetti.ui.components.ScreenHeading
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -65,6 +66,7 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
@@ -72,20 +74,16 @@ fun SettingsScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            Text(
-                "Settings",
-                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                "Control how SavePetti looks and keep a copy of your saved data.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            ScreenHeading(
+                title = "Settings",
+                subtitle = "How SavePetti looks, plus a backup whenever you need one."
             )
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(8.dp))
+            // Inset the rest of the page so it lines up with section gutters
+            // while still letting ScreenHeading own its own padding above.
+            Column(Modifier.padding(horizontal = 20.dp)) {
             SettingsSection(title = "Appearance") {
                 ThemeChoice(
                     mode = ThemeMode.SYSTEM,
@@ -194,6 +192,7 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(16.dp).navigationBarsPadding())
+            }
         }
     }
 }

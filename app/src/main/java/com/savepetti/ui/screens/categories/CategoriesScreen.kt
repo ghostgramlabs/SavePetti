@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +59,7 @@ import com.savepetti.ui.components.CollectionColorSeeds
 import com.savepetti.ui.components.CollectionEmojiSeeds
 import com.savepetti.ui.components.EmptyState
 import com.savepetti.ui.components.SaveCard
+import com.savepetti.ui.components.ScreenHeading
 import com.savepetti.ui.components.toLongHex
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,83 +105,87 @@ fun CategoriesScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (selected != null) "${selected.emoji} ${selected.name}" else "Browse",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (state.selectedId != null) viewModel.select(null) else onBack()
-                    }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-                },
-                actions = {
-                    if (selected?.userCreated == true) {
-                        IconButton(onClick = { showEditCategory = true }) {
-                            Icon(
-                                Icons.Rounded.Edit,
-                                contentDescription = "Edit collection"
-                            )
-                        }
-                        IconButton(onClick = { showDeleteCategory = true }) {
-                            Icon(
-                                Icons.Rounded.Delete,
-                                contentDescription = "Delete collection",
-                                tint = MaterialTheme.colorScheme.error
-                            )
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
+    ) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            if (state.selectedId == null) {
+                ScreenHeading(
+                    title = "Browse",
+                    // Categories is reachable both as a tab AND deep-linked
+                    // from a Home category chip — keep a back affordance so
+                    // the deep-linked entry can pop back to Home.
+                    leading = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent
                 )
-            )
-        }
-    ) { padding ->
-        if (state.selectedId == null) {
-            CategoryGrid(
-                categories = state.categories,
-                counts = state.countsByCategory,
-                onSelect = viewModel::select,
-                modifier = Modifier.padding(padding)
-            )
-        } else {
-            val drillItems = viewModel.drillItems.collectAsLazyPagingItems()
-            val isEmpty = drillItems.itemCount == 0 &&
-                drillItems.loadState.refresh is androidx.paging.LoadState.NotLoading
+                CategoryGrid(
+                    categories = state.categories,
+                    counts = state.countsByCategory,
+                    onSelect = viewModel::select,
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                )
+            } else {
+                val count = state.countsByCategory[state.selectedId] ?: 0
+                ScreenHeading(
+                    title = if (selected != null) "${selected.emoji} ${selected.name}" else "Collection",
+                    subtitle = if (count > 0) "$count save${if (count == 1) "" else "s"}" else null,
+                    leading = {
+                        IconButton(onClick = { viewModel.select(null) }) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    trailing = {
+                        if (selected?.userCreated == true) {
+                            Row {
+                                IconButton(onClick = { showEditCategory = true }) {
+                                    Icon(Icons.Rounded.Edit, contentDescription = "Edit collection")
+                                }
+                                IconButton(onClick = { showDeleteCategory = true }) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = "Delete collection",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
 
-            if (isEmpty) {
-                Column(Modifier.padding(padding).fillMaxSize()) {
+                val drillItems = viewModel.drillItems.collectAsLazyPagingItems()
+                val isEmpty = drillItems.itemCount == 0 &&
+                    drillItems.loadState.refresh is androidx.paging.LoadState.NotLoading
+
+                if (isEmpty) {
                     EmptyState(
                         emoji = "\uD83D\uDCEC",
                         headline = "Nothing here yet",
                         body = "Save something into ${selected?.name ?: "this"} from the share sheet, then it'll show up.",
                         accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary
                     )
-                }
-            } else {
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 4.dp),
-                    verticalItemSpacing = 12.dp,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(padding).fillMaxSize()
-                ) {
-                    items(
-                        count = drillItems.itemCount,
-                        key = { idx -> drillItems.peek(idx)?.id ?: idx }
-                    ) { idx ->
-                        val item = drillItems[idx] ?: return@items
-                        SaveCard(
-                            item = item,
-                            accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
-                            categoryEmoji = selected?.emoji,
-                            categoryName = selected?.name,
-                            onClick = { onOpenItem(item.id) }
-                        )
+                } else {
+                    LazyVerticalStaggeredGrid(
+                        columns = StaggeredGridCells.Fixed(2),
+                        contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 4.dp),
+                        verticalItemSpacing = 12.dp,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    ) {
+                        items(
+                            count = drillItems.itemCount,
+                            key = { idx -> drillItems.peek(idx)?.id ?: idx }
+                        ) { idx ->
+                            val item = drillItems[idx] ?: return@items
+                            SaveCard(
+                                item = item,
+                                accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
+                                categoryEmoji = selected?.emoji,
+                                categoryName = selected?.name,
+                                onClick = { onOpenItem(item.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -202,9 +208,14 @@ private fun CategoryGrid(
         modifier = modifier.fillMaxSize()
     ) {
         items(categories, key = { it.id }) { c ->
+            // Same hand-arranged-row idea as the Home category strip: each
+            // tile leans by ±1° based on its sortOrder so the grid doesn't
+            // read as a perfectly snapped 2-up.
+            val tilt = if (c.sortOrder % 2 == 0) -1f else 1f
             CategoryTile(
                 c = c,
                 count = counts[c.id] ?: 0,
+                tilt = tilt,
                 onClick = { onSelect(c.id) }
             )
         }
@@ -212,12 +223,13 @@ private fun CategoryGrid(
 }
 
 @Composable
-private fun CategoryTile(c: CategoryEntity, count: Int, onClick: () -> Unit) {
+private fun CategoryTile(c: CategoryEntity, count: Int, tilt: Float, onClick: () -> Unit) {
     val color = Color(c.colorHex)
     Column(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 168.dp)
+            .rotate(tilt)
             .clip(RoundedCornerShape(22.dp))
             .background(color.copy(alpha = 0.16f))
             .clickable(onClick = onClick)

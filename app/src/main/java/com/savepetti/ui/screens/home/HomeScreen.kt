@@ -75,6 +75,7 @@ import com.savepetti.data.local.SaveItemEntity
 import com.savepetti.ui.components.CategoryChip
 import com.savepetti.ui.components.EmptyState
 import com.savepetti.ui.components.SaveCard
+import com.savepetti.ui.components.ScreenHeading
 import com.savepetti.ui.components.SearchPill
 import com.savepetti.ui.components.SectionHeader
 import com.savepetti.ui.screens.save.IncomingShare
@@ -173,6 +174,10 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        // The NavGraph's outer Scaffold already consumed status-bar and
+        // bottom-nav insets — re-applying them here is what created the
+        // double-padded gap above the bottom nav and below the status bar.
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showChooser = true },
@@ -275,13 +280,11 @@ fun HomeScreen(
             }
 
             items(state.pinned, key = { "p-${it.id}" }) { item ->
-                // Pinned items get a small alternating tilt so the row of
-                // bookmarked things visually pops out of the otherwise
-                // grid-aligned recents below it.
-                val tilt = if (item.id % 2L == 0L) -0.9f else 1.1f
-                Box(Modifier.rotate(tilt)) {
-                    CardForItem(item, state.categories, onOpenItem)
-                }
+                // Pinned items already carry a tape-strip overlay from
+                // SaveCard. Adding a wrapper rotation on top of that was
+                // signal piled on signal — cards either side of one
+                // another would visually clash. Tape alone is enough.
+                CardForItem(item, state.categories, onOpenItem)
             }
 
             if (state.recent.isNotEmpty()) {
@@ -457,20 +460,7 @@ private fun GuideStep(
 
 @Composable
 private fun Greeting() {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "What's on the shelf?",
-                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-    }
+    ScreenHeading(title = "What's on the shelf?")
 }
 
 @Composable

@@ -236,11 +236,13 @@ fun SaveSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(state.categories, key = { it.id }) { c ->
+                    val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
                     CategoryChip(
                         label = c.name,
                         emoji = c.emoji,
                         color = Color(c.colorHex),
                         selected = state.selectedCategory == c.id,
+                        tilt = tilt,
                         // Stash flow: tapping a collection IS the save.
                         // The bottom-bar Save button is a fallback for
                         // saves the user wants to keep uncategorized.

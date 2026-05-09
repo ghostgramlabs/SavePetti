@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -53,6 +54,7 @@ import com.savepetti.domain.model.SourceApp
 import com.savepetti.ui.components.CategoryChip
 import com.savepetti.ui.components.EmptyState
 import com.savepetti.ui.components.SaveCard
+import com.savepetti.ui.components.ScreenHeading
 import com.savepetti.ui.components.SearchField
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,9 +97,15 @@ fun SearchScreen(
         }
     }
 
-    Scaffold(containerColor = androidx.compose.ui.graphics.Color.Transparent) { padding ->
+    Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
+    ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            Spacer(Modifier.height(4.dp))
+            ScreenHeading(
+                title = "Look it up",
+                subtitle = "Titles, notes, sources, even text inside images."
+            )
             SearchField(
                 value = state.query,
                 placeholder = "Search anything you saved",
@@ -184,6 +192,7 @@ private fun QuickSearchSuggestions(
                 emoji = "\uD83D\uDDBC",
                 color = MaterialTheme.colorScheme.primary,
                 selected = false,
+                tilt = -2f,
                 onClick = { onToggleType(ContentType.IMAGE) }
             )
         }
@@ -193,6 +202,7 @@ private fun QuickSearchSuggestions(
                 emoji = "\uD83D\uDD17",
                 color = MaterialTheme.colorScheme.secondary,
                 selected = false,
+                tilt = 1.5f,
                 onClick = { onToggleType(ContentType.LINK) }
             )
         }
@@ -202,6 +212,7 @@ private fun QuickSearchSuggestions(
                 emoji = "\uD83D\uDCC4",
                 color = MaterialTheme.colorScheme.tertiary,
                 selected = false,
+                tilt = -2f,
                 onClick = { onToggleType(ContentType.PDF) }
             )
         }
@@ -211,6 +222,7 @@ private fun QuickSearchSuggestions(
                 emoji = "\uD83D\uDDD2",
                 color = MaterialTheme.colorScheme.primary,
                 selected = false,
+                tilt = 1.5f,
                 onClick = { onToggleType(ContentType.NOTE) }
             )
         }
@@ -350,11 +362,13 @@ private fun FilterSheetBody(
         FilterGroupTitle("Type")
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(typeChoices()) { (t, label, emoji) ->
+            itemsIndexed(typeChoices()) { idx, triple ->
+                val (t, label, emoji) = triple
                 CategoryChip(
                     label = label, emoji = emoji,
                     color = MaterialTheme.colorScheme.primary,
                     selected = state.typeFilter == t,
+                    tilt = if (idx % 2 == 0) -2f else 1.5f,
                     onClick = { onToggleType(t) }
                 )
             }
@@ -365,10 +379,12 @@ private fun FilterSheetBody(
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.categories, key = { it.id }) { c ->
+                val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
                 CategoryChip(
                     label = c.name, emoji = c.emoji,
                     color = Color(c.colorHex),
                     selected = state.categoryFilter == c.id,
+                    tilt = tilt,
                     onClick = { onToggleCategory(c.id) }
                 )
             }
@@ -383,6 +399,7 @@ private fun FilterSheetBody(
                     label = s.displayName, emoji = s.emoji,
                     color = MaterialTheme.colorScheme.secondary,
                     selected = state.sourceFilter == s.name,
+                    tilt = if (s.ordinal % 2 == 0) -2f else 1.5f,
                     onClick = { onToggleSource(s.name) }
                 )
             }
@@ -393,12 +410,13 @@ private fun FilterSheetBody(
             FilterGroupTitle("Tags")
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.knownTags, key = { it }) { t ->
+                itemsIndexed(state.knownTags, key = { _, t -> t }) { idx, t ->
                     CategoryChip(
                         label = "#$t",
                         emoji = null,
                         color = MaterialTheme.colorScheme.tertiary,
                         selected = state.tagFilter.equals(t, ignoreCase = true),
+                        tilt = if (idx % 2 == 0) -2f else 1.5f,
                         onClick = { onToggleTag(t) }
                     )
                 }
