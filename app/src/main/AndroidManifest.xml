@@ -5,19 +5,19 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <application
-        android:name=".SavePettiApp"
+        android:name=".PettiBoxApp"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SavePetti"
+        android:theme="@style/Theme.PettiBox"
         android:enableOnBackInvokedCallback="true">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.SavePetti">
+            android:theme="@style/Theme.PettiBox">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -30,7 +30,7 @@
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:taskAffinity=""
-            android:theme="@style/Theme.SavePetti.Transparent">
+            android:theme="@style/Theme.PettiBox.Transparent">
 
             <intent-filter android:label="@string/share_label">
                 <action android:name="android.intent.action.SEND" />

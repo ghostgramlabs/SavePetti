@@ -5,10 +5,10 @@
 # ── Room ─────────────────────────────────────────────────────────────────
 # Concrete database name (avoids "class * extends RoomDatabase" rule which
 # triggers an R8 ConcurrentModificationException in 8.5.x with this graph).
--keep class com.savepetti.data.local.AppDatabase { *; }
--keep class com.savepetti.data.local.AppDatabase_Impl { *; }
--keep class com.savepetti.data.local.** { *; }
--keepclassmembers class com.savepetti.data.local.** {
+-keep class com.ghostgramlabs.pettibox.data.local.AppDatabase { *; }
+-keep class com.ghostgramlabs.pettibox.data.local.AppDatabase_Impl { *; }
+-keep class com.ghostgramlabs.pettibox.data.local.** { *; }
+-keepclassmembers class com.ghostgramlabs.pettibox.data.local.** {
     @androidx.room.* <methods>;
     @androidx.room.* <fields>;
 }

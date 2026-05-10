@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SavePetti"
+rootProject.name = "PettiBox"
 include(":app")

@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.savepetti"
+    namespace = "com.ghostgramlabs.pettibox"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.savepetti"
+        applicationId = "com.ghostgramlabs.pettibox"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

@@ -1,0 +1,537 @@
+package com.ghostgramlabs.pettibox.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Notes
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
+import com.ghostgramlabs.pettibox.data.util.TimeFormat
+import com.ghostgramlabs.pettibox.domain.model.ContentType
+import com.ghostgramlabs.pettibox.domain.model.SourceApp
+
+/**
+ * Save card with per-content-type visual treatment so a Pinterest-style
+ * grid actually has rhythm:
+ *
+ * - IMAGE  → polaroid: white frame, photo on top, caption at the bottom.
+ * - LINK   → web bookmark: thumbnail with a folded top-right corner and a
+ *            rubber-stamp source label.
+ * - NOTE   → sticky-note: washed pastel paper (deterministic from item id),
+ *            no border, slight tilt — looks scribbled on.
+ * - PDF/FILE → manila card with a paperclip stroke up top.
+ *
+ * Pinned items get a yellow tape strip overlay regardless of type, and
+ * the source emoji is reprised as a stamp on every type so the grid has
+ * a recurring "postmark" motif.
+ */
+@Composable
+fun SaveCard(
+    item: SaveItemEntity,
+    accent: Color,
+    categoryEmoji: String?,
+    categoryName: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val type = runCatching { ContentType.valueOf(item.contentType) }.getOrDefault(ContentType.NOTE)
+    val source = runCatching { SourceApp.valueOf(item.sourceApp) }.getOrDefault(SourceApp.UNKNOWN)
+
+    when (type) {
+        ContentType.IMAGE -> PolaroidCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
+        ContentType.LINK -> LinkBookmarkCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
+        ContentType.NOTE, ContentType.TEXT -> StickyNoteCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
+        ContentType.PDF, ContentType.FILE -> PaperclipCard(item, type, accent, source, categoryEmoji, categoryName, onClick, modifier)
+    }
+}
+
+// ── Variants ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun PolaroidCard(
+    item: SaveItemEntity,
+    accent: Color,
+    source: SourceApp,
+    categoryEmoji: String?,
+    categoryName: String?,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFFFDFBF6))
+                .border(1.dp, Color(0xFFE6DFD2), RoundedCornerShape(6.dp))
+                .clickable(onClick = onClick)
+                .padding(8.dp)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(accent.copy(alpha = 0.12f))
+            ) {
+                AsyncImage(
+                    model = item.thumbnailUri ?: item.localUri,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                SourceStamp(
+                    source = source,
+                    accent = accent,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2
+            )
+            Spacer(Modifier.height(6.dp))
+            FooterMeta(item, accent, categoryEmoji, categoryName, source, omitSource = true)
+            Spacer(Modifier.height(6.dp))
+        }
+        if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+    }
+}
+
+@Composable
+private fun LinkBookmarkCard(
+    item: SaveItemEntity,
+    accent: Color,
+    source: SourceApp,
+    categoryEmoji: String?,
+    categoryName: String?,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+                .drawWithContent {
+                    drawContent()
+                    drawFoldedCorner(accent.copy(alpha = 0.22f))
+                }
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.4f)
+                    .background(accent.copy(alpha = 0.14f))
+            ) {
+                if (!item.thumbnailUri.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.thumbnailUri,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.Link,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(36.dp)
+                    )
+                }
+                SourceStamp(
+                    source = source,
+                    accent = accent,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp)
+                )
+            }
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = scheme.onSurface,
+                    maxLines = 2
+                )
+                if (!item.notes.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        item.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                FooterMeta(item, accent, categoryEmoji, categoryName, source, omitSource = true)
+            }
+        }
+        if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+    }
+}
+
+@Composable
+private fun StickyNoteCard(
+    item: SaveItemEntity,
+    accent: Color,
+    source: SourceApp,
+    categoryEmoji: String?,
+    categoryName: String?,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    val tint = stickyTintFor(item.id)
+    // No card-level tilt: the pastel tint + no-border treatment + footer
+    // stamp already say "sticky note." Tilted serif body in a small
+    // staggered cell was hurting readability without adding meaning.
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(tint)
+                .clickable(onClick = onClick)
+                .padding(14.dp)
+        ) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Serif
+                ),
+                color = Color(0xFF2A231C),
+                maxLines = 4
+            )
+            if (!item.notes.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                // Capped at 3 lines (was 6) — long previews on a tinted
+                // small card become a wall of text with bad scan affordance.
+                Text(
+                    item.notes,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF2A231C).copy(alpha = 0.78f),
+                    maxLines = 3
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SourceStamp(source = source, accent = Color(0xFF2A231C))
+                Spacer(Modifier.weight(1f))
+                Text(
+                    TimeFormat.relative(item.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF2A231C).copy(alpha = 0.6f)
+                )
+                if (item.isPinned) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(14.dp))
+                }
+                if (item.isFavorite) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.Favorite, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                }
+            }
+            if (categoryEmoji != null && categoryName != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "$categoryEmoji $categoryName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent
+                )
+            }
+        }
+        if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+    }
+}
+
+@Composable
+private fun PaperclipCard(
+    item: SaveItemEntity,
+    type: ContentType,
+    accent: Color,
+    source: SourceApp,
+    categoryEmoji: String?,
+    categoryName: String?,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(headerRatio(type))
+                    .background(accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = iconFor(type),
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(42.dp)
+                )
+                SourceStamp(
+                    source = source,
+                    accent = accent,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                )
+            }
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = scheme.onSurface,
+                    maxLines = 2
+                )
+                if (!item.notes.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        item.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                FooterMeta(item, accent, categoryEmoji, categoryName, source, omitSource = true)
+            }
+        }
+        Paperclip(Modifier.align(Alignment.TopCenter))
+        if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+    }
+}
+
+// ── Shared bits ───────────────────────────────────────────────────────────
+
+@Composable
+private fun FooterMeta(
+    item: SaveItemEntity,
+    accent: Color,
+    categoryEmoji: String?,
+    categoryName: String?,
+    source: SourceApp,
+    omitSource: Boolean
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (categoryEmoji != null && categoryName != null) {
+            Box(
+                Modifier
+                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    "$categoryEmoji $categoryName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent
+                )
+            }
+            Spacer(Modifier.size(8.dp))
+        }
+        Text(
+            text = if (omitSource) TimeFormat.relative(item.createdAt)
+                   else "${source.emoji} ${TimeFormat.relative(item.createdAt)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = scheme.onSurfaceVariant
+        )
+        Spacer(Modifier.weight(1f))
+        if (item.isPinned) {
+            Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(16.dp))
+        }
+        if (item.isFavorite) {
+            Spacer(Modifier.size(4.dp))
+            Icon(
+                Icons.Rounded.Favorite, null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Rubber-stamp treatment of the source app: tilted, monospaced, dark-ink
+ * label inside a category-tinted border. The label uses [onSurface] so the
+ * text reads against any hero (photo, accent block, sticky-note tint) —
+ * accent-tinted text was failing contrast on the paler categories.
+ */
+@Composable
+private fun SourceStamp(
+    source: SourceApp,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    if (source == SourceApp.UNKNOWN) return
+    val label = MaterialTheme.colorScheme.onSurface
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .rotate(-7f)
+            .border(1.2.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
+            .background(accent.copy(alpha = 0.08f), RoundedCornerShape(3.dp))
+            .padding(horizontal = 5.dp, vertical = 1.dp)
+    ) {
+        Text(source.emoji, style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.width(3.dp))
+        Text(
+            source.displayName.uppercase(),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.2.sp,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            ),
+            color = label.copy(alpha = 0.72f)
+        )
+    }
+}
+
+@Composable
+private fun PinnedTape(modifier: Modifier = Modifier) {
+    // offset() accepts negatives; padding() does not — this used to crash
+    // when the grid composed a pinned item.
+    Box(
+        modifier
+            .offset(x = 14.dp, y = (-6).dp)
+            .rotate(-22f)
+            .background(Color(0xCCF2E5A8))
+            .padding(horizontal = 22.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun Paperclip(modifier: Modifier = Modifier) {
+    // Tiny U-shaped stroke at the top edge of the card, suggesting a clip
+    // hooked over the page. Subtle but distinctive.
+    Box(
+        modifier
+            .offset(y = (-4).dp)
+            .size(width = 16.dp, height = 22.dp)
+            .drawWithContent {
+                drawContent()
+                val w = size.width
+                val h = size.height
+                val path = Path().apply {
+                    moveTo(w * 0.2f, 0f)
+                    lineTo(w * 0.2f, h * 0.7f)
+                    quadraticBezierTo(w * 0.5f, h, w * 0.8f, h * 0.7f)
+                    lineTo(w * 0.8f, h * 0.2f)
+                }
+                drawPath(
+                    path = path,
+                    color = Color(0xFF8C8579),
+                    style = Stroke(width = 2.4f, cap = StrokeCap.Round)
+                )
+            }
+    )
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFoldedCorner(color: Color) {
+    val cornerSize = 18f
+    val w = size.width
+    val path = Path().apply {
+        moveTo(w - cornerSize, 0f)
+        lineTo(w, 0f)
+        lineTo(w, cornerSize)
+        close()
+    }
+    drawPath(path, color)
+    // Hairline diagonal where the fold meets the page
+    drawLine(
+        color = color.copy(alpha = 0.55f),
+        start = Offset(w - cornerSize, 0f),
+        end = Offset(w, cornerSize),
+        strokeWidth = 1.2f
+    )
+}
+
+private fun iconFor(type: ContentType) = when (type) {
+    ContentType.LINK -> Icons.Rounded.Link
+    ContentType.IMAGE -> Icons.Rounded.Image
+    ContentType.PDF -> Icons.Rounded.PictureAsPdf
+    ContentType.NOTE, ContentType.TEXT -> Icons.Rounded.Notes
+    ContentType.FILE -> Icons.Rounded.Notes
+}
+
+private fun headerRatio(type: ContentType): Float = when (type) {
+    ContentType.LINK -> 1.4f
+    ContentType.IMAGE -> 1.0f
+    ContentType.PDF -> 1.6f
+    ContentType.TEXT -> 2.2f
+    ContentType.NOTE -> 2.4f
+    ContentType.FILE -> 1.8f
+}
+
+// ── Sticky note tints ─────────────────────────────────────────────────────
+
+private val StickyNoteTints = listOf(
+    Color(0xFFF2E5A8), // butter
+    Color(0xFFD7E2C5), // mint
+    Color(0xFFC9D7E0), // sky
+    Color(0xFFE8D0CE)  // peach pink
+)
+
+private fun stickyTintFor(id: Long): Color {
+    val idx = ((id % StickyNoteTints.size) + StickyNoteTints.size) % StickyNoteTints.size
+    return StickyNoteTints[idx.toInt()]
+}
