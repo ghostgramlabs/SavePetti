@@ -255,6 +255,17 @@ fun SaveSheet(
                 item {
                     NewCollectionChip(onClick = { showCreate = true })
                 }
+                // "Add to existing" as a peer chip in the same row, not a
+                // hidden text link below. Without this, the one-tap chip
+                // flow above intercepts the user before they ever discover
+                // the existing-save path.
+                if (state.recentItems.isNotEmpty()) {
+                    item {
+                        AddToExistingChip(
+                            onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
+                        )
+                    }
+                }
             }
 
             // Optional details expand on demand.
@@ -268,19 +279,6 @@ fun SaveSheet(
                 onTagsChange = viewModel::setTags,
                 titleFocus = titleFocus
             )
-
-            if (state.recentItems.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                androidx.compose.material3.TextButton(
-                    onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
-                ) {
-                    Text(
-                        "or add to an existing save ->",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
             // Bottom padding inside the scroll so the last field clears the
             // sticky action bar even before the user scrolls.
             Spacer(Modifier.height(16.dp))
@@ -536,6 +534,29 @@ private fun SuccessPanel() {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun AddToExistingChip(onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(scheme.surface)
+            .border(1.5.dp, scheme.onSurfaceVariant, CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
+        Text(
+            "Append to a save",
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("→", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
     }
 }
 

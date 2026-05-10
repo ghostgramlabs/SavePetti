@@ -26,8 +26,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -274,17 +276,19 @@ fun HomeScreen(
                     }
                     if (state.pinned.isNotEmpty()) {
                         SectionHeader("Pinned", subtitle = "Stuff you didn't want to lose")
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(8.dp))
+                        // Pinned items render as a leaning "shelf" instead of
+                        // joining the staggered grid: alternating tilt, varying
+                        // widths, and a hand-drawn shelf line beneath. Reads
+                        // like books on a shelf rather than items in a grid.
+                        PinnedShelf(
+                            items = state.pinned,
+                            categories = state.categories,
+                            onOpenItem = onOpenItem
+                        )
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
-            }
-
-            items(state.pinned, key = { "p-${it.id}" }) { item ->
-                // Pinned items already carry a tape-strip overlay from
-                // SaveCard. Adding a wrapper rotation on top of that was
-                // signal piled on signal — cards either side of one
-                // another would visually clash. Tape alone is enough.
-                CardForItem(item, state.categories, onOpenItem)
             }
 
             if (state.recent.isNotEmpty()) {
@@ -544,6 +548,90 @@ private fun CardForItem(
         categoryName = cat?.name,
         onClick = { onOpen(item.id) }
     )
+}
+
+/**
+ * Pinned items rendered as a leaning shelf: a horizontally-scrolling row
+ * of cards with alternating tilts, alternating top-padding (so some sit
+ * lower like they slumped against the next one), varying widths, and a
+ * single hand-drawn ink line beneath as the shelf board. Visually the
+ * opposite of a grid — that's the point.
+ */
+@Composable
+private fun PinnedShelf(
+    items: List<SaveItemEntity>,
+    categories: List<CategoryEntity>,
+    onOpenItem: (Long) -> Unit
+) {
+    val tilts = listOf(-3f, 2.5f, -1.5f, 3f, -2.5f, 1.5f)
+    val widthsDp = listOf(170, 150, 175, 158, 165, 152)
+    Column(Modifier.fillMaxWidth()) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            itemsIndexed(items, key = { _, it -> "p-${it.id}" }) { idx, item ->
+                val tilt = tilts[idx % tilts.size]
+                val width = widthsDp[idx % widthsDp.size].dp
+                // Alternating cards "slump" lower so the row reads as
+                // hand-arranged, not aligned-by-grid.
+                val lift = if (idx % 2 == 1) 10.dp else 0.dp
+                val cat = categories.firstOrNull { it.id == item.categoryId }
+                Box(
+                    Modifier
+                        .padding(top = lift, bottom = 0.dp)
+                        .width(width)
+                        .rotate(tilt)
+                ) {
+                    SaveCard(
+                        item = item,
+                        accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
+                        categoryEmoji = cat?.emoji,
+                        categoryName = cat?.name,
+                        onClick = { onOpenItem(item.id) }
+                    )
+                }
+            }
+        }
+        ShelfLine(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/** Wavy single-stroke ink line — the "shelf board." */
+@Composable
+private fun ShelfLine(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.height(8.dp)) {
+        val midY = size.height / 2f
+        val amp = 1.4f
+        val period = 16f
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, midY)
+            var x = 0f
+            while (x <= size.width) {
+                val y = midY + amp * kotlin.math.sin(x / period * Math.PI.toFloat() * 2f)
+                lineTo(x, y)
+                x += 2f
+            }
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round
+            )
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
