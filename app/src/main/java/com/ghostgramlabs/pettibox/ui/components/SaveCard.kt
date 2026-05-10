@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -230,7 +231,15 @@ private fun StickyNoteCard(
     onClick: () -> Unit,
     modifier: Modifier
 ) {
-    val tint = stickyTintFor(item.id)
+    // Theme-aware sticky tint + ink: bright pastels in light mode (real
+    // sticky-note look on cream paper) become muted dark-warm tones in
+    // dark mode (tinted dark "paper"), with light ink on top. The bright
+    // pastels were punching through the warm-charcoal dark theme like
+    // stickers stuck on a wall — this restores the right "paper that
+    // belongs in this room" feel.
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val tint = stickyTintFor(item.id, isDark)
+    val ink = if (isDark) Color(0xFFE9E2D2) else Color(0xFF2A231C)
     // No card-level tilt: the pastel tint + no-border treatment + footer
     // stamp already say "sticky note." Tilted serif body in a small
     // staggered cell was hurting readability without adding meaning.
@@ -249,7 +258,7 @@ private fun StickyNoteCard(
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Serif
                 ),
-                color = Color(0xFF2A231C),
+                color = ink,
                 maxLines = 4
             )
             if (!item.notes.isNullOrBlank()) {
@@ -259,18 +268,18 @@ private fun StickyNoteCard(
                 Text(
                     item.notes,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF2A231C).copy(alpha = 0.78f),
+                    color = ink.copy(alpha = 0.78f),
                     maxLines = 3
                 )
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SourceStamp(source = source, accent = Color(0xFF2A231C))
+                SourceStamp(source = source, accent = ink)
                 Spacer(Modifier.weight(1f))
                 Text(
                     TimeFormat.relative(item.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF2A231C).copy(alpha = 0.6f)
+                    color = ink.copy(alpha = 0.6f)
                 )
                 if (item.isPinned) {
                     Spacer(Modifier.width(6.dp))
@@ -523,15 +532,26 @@ private fun headerRatio(type: ContentType): Float = when (type) {
 }
 
 // ── Sticky note tints ─────────────────────────────────────────────────────
+// Two parallel palettes so the sticky-note metaphor survives the theme
+// switch: bright pastels on cream in light mode (paper on a desk),
+// muted dark-warm tones on charcoal in dark mode (tinted dark paper).
 
-private val StickyNoteTints = listOf(
+private val StickyNoteTintsLight = listOf(
     Color(0xFFF2E5A8), // butter
     Color(0xFFD7E2C5), // mint
     Color(0xFFC9D7E0), // sky
     Color(0xFFE8D0CE)  // peach pink
 )
 
-private fun stickyTintFor(id: Long): Color {
-    val idx = ((id % StickyNoteTints.size) + StickyNoteTints.size) % StickyNoteTints.size
-    return StickyNoteTints[idx.toInt()]
+private val StickyNoteTintsDark = listOf(
+    Color(0xFF433D2A), // muted warm yellow
+    Color(0xFF3D3F2E), // muted warm green
+    Color(0xFF353A40), // muted blue-gray
+    Color(0xFF433539)  // muted warm pink
+)
+
+private fun stickyTintFor(id: Long, isDark: Boolean): Color {
+    val palette = if (isDark) StickyNoteTintsDark else StickyNoteTintsLight
+    val idx = ((id % palette.size) + palette.size) % palette.size
+    return palette[idx.toInt()]
 }
