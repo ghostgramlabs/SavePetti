@@ -256,7 +256,7 @@ private fun ThemeChoice(
 }
 
 private fun shareBackupFile(ctx: Context, json: String): Boolean {
-    val file = File(ctx.cacheDir, "savepetti-backup-${System.currentTimeMillis()}.json")
+    val file = File(ctx.cacheDir, "pettibox-backup-${System.currentTimeMillis()}.json")
     file.writeText(json)
     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
     val intent = Intent(Intent.ACTION_SEND).apply {

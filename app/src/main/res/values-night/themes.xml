@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SavePetti" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.PettiBox" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">#14130F</item>
         <item name="android:navigationBarColor">#14130F</item>
         <item name="android:windowBackground">#14130F</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
-    <style name="Theme.SavePetti.Transparent" parent="Theme.SavePetti">
+    <style name="Theme.PettiBox.Transparent" parent="Theme.PettiBox">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowAnimationStyle">@null</item>
