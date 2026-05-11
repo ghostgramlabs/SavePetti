@@ -31,12 +31,12 @@ val hasReleaseSigning = listOf(
 
 android {
     namespace = "com.ghostgramlabs.pettibox"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.ghostgramlabs.pettibox"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
         vectorDrawables { useSupportLibrary = true }
