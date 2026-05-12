@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TextSnippet
@@ -51,14 +52,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -69,7 +75,15 @@ fun SettingsScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val localBackupPath = remember { viewModel.localBackupPath() }
     val autoScanOcr by viewModel.autoScanOcr.collectAsStateWithLifecycle(initialValue = true)
+    val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle(
+        initialValue = LocalBackupStatus(
+            enabled = false,
+            lastBackupAt = 0L,
+            lastBackupName = ""
+        )
+    )
     val importBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -221,7 +235,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "Export creates a ZIP with backup.json and local attachment files. Import restores saves, collections, tags, and copied files.",
+                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup saves the same ZIP on this device and keeps the latest 7 copies.",
                     icon = Icons.Rounded.Download
                 )
             }
@@ -234,6 +248,94 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Automatic local backup",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            if (localBackupStatus.lastBackupAt > 0L) {
+                                "Nightly at about 2 AM. Last backup: ${formatBackupTime(localBackupStatus.lastBackupAt)}."
+                            } else {
+                                "Nightly at about 2 AM. Stored on this device only."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = localBackupStatus.enabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                viewModel.setAutoLocalBackup(enabled)
+                                snackbarHostState.showSnackbar(
+                                    if (enabled) "Nightly local backup is on"
+                                    else "Nightly local backup is off"
+                                )
+                            }
+                        }
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Backups stay in ${viewModel.localBackupLocationLabel()}. PettiBox keeps the latest 7 automatic backups.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Backup folder",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                SelectionContainer {
+                    Text(
+                        localBackupPath,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                            .padding(10.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            runCatching { viewModel.createLocalBackupNow() }
+                                .onSuccess { (_, result) ->
+                                    snackbarHostState.showSnackbar(
+                                        "Local backup saved in PettiBox backups with ${result.saves} saves and ${result.embeddedFiles} files"
+                                    )
+                                }
+                                .onFailure {
+                                    snackbarHostState.showSnackbar("Couldn't create local backup")
+                                }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Back up now on this device", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = {
                         scope.launch {
@@ -446,3 +548,6 @@ private fun shareBackupFile(ctx: Context, file: File): Boolean {
         ctx.startActivity(Intent.createChooser(intent, "Export PettiBox backup"))
     }.isSuccess
 }
+
+private fun formatBackupTime(timestamp: Long): String =
+    SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(timestamp))

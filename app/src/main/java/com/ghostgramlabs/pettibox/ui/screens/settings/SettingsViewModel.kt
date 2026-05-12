@@ -3,10 +3,14 @@ package com.ghostgramlabs.pettibox.ui.screens.settings
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorker
 import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
+import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
+import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
+import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -17,9 +21,12 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val ocrPreferences: OcrPreferences,
+    private val backupPreferences: BackupPreferences,
+    private val localBackupStore: LocalBackupStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
+    val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 
@@ -31,6 +38,27 @@ class SettingsViewModel @Inject constructor(
 
     suspend fun importBackupJson(json: String): SaveRepository.BackupImportResult =
         repo.importBackupJson(json)
+
+    suspend fun createLocalBackupNow(): Pair<File, SaveRepository.BackupExportResult> {
+        val file = localBackupStore.createBackupFile()
+        val result = repo.exportBackupZip(file)
+        localBackupStore.pruneOldBackups()
+        backupPreferences.recordLocalBackup(file.name, file.lastModified())
+        return file to result
+    }
+
+    suspend fun setAutoLocalBackup(enabled: Boolean) {
+        backupPreferences.setAutoLocalBackup(enabled)
+        if (enabled) {
+            LocalBackupWorker.schedule(appContext)
+        } else {
+            LocalBackupWorker.cancel(appContext)
+        }
+    }
+
+    fun localBackupLocationLabel(): String = localBackupStore.backupLocationLabel()
+
+    fun localBackupPath(): String = localBackupStore.backupPath()
 
     suspend fun importBackupUri(uri: Uri): SaveRepository.BackupImportResult {
         val name = appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
