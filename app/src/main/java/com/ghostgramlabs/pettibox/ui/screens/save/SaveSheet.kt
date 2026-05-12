@@ -60,9 +60,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,7 +81,6 @@ fun SaveSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scope = rememberCoroutineScope()
     var showCreate by remember { mutableStateOf(false) }
-    val ctx = LocalContext.current
     val titleFocus = remember { FocusRequester() }
     val haptics = LocalHapticFeedback.current
 
@@ -94,8 +91,6 @@ fun SaveSheet(
     // shouldn't pop the keyboard up unprompted.
     LaunchedEffect(state.isSaved) {
         if (state.isSaved) {
-            // System-level confirmation in case the in-sheet animation gets cut off
-            Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()
             // Hold the success state on screen briefly so the user sees the check
             delay(900)
             sheetState.hide()
