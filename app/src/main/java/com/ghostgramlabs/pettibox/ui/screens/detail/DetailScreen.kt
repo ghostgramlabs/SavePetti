@@ -423,9 +423,14 @@ fun DetailScreen(
                 Spacer(Modifier.height(24.dp))
                 NotesEditor(initial = item.notes.orEmpty(), onSave = viewModel::updateNotes)
 
-                if (!item.ocrText.isNullOrBlank()) {
+                if (!item.ocrText.isNullOrBlank() || hasIndexableAttachments(state.attachments) || isIndexableKind(item.contentType)) {
                     Spacer(Modifier.height(24.dp))
-                    OcrTextSection(text = item.ocrText)
+                    OcrTextSections(
+                        itemText = item.ocrText,
+                        itemKind = item.contentType,
+                        attachments = state.attachments,
+                        autoScanEnabled = state.ocrAutoScanEnabled
+                    )
                 } else if (state.ocrAutoScanEnabled && isIndexingText(item.contentType, state.attachments)) {
                     Spacer(Modifier.height(24.dp))
                     IndexingTextSection()
@@ -637,6 +642,14 @@ private fun isIndexingText(kind: String, attachments: List<AttachmentEntity>): B
     }
 }
 
+private fun isIndexableKind(kind: String): Boolean {
+    val type = runCatching { ContentType.valueOf(kind) }.getOrDefault(ContentType.FILE)
+    return type == ContentType.IMAGE || type == ContentType.PDF
+}
+
+private fun hasIndexableAttachments(attachments: List<AttachmentEntity>): Boolean =
+    attachments.any { isIndexableKind(it.kind) }
+
 @Composable
 private fun IndexingTextSection() {
     Box(
@@ -654,56 +667,151 @@ private fun IndexingTextSection() {
     }
 }
 
+private data class OcrDocText(
+    val title: String,
+    val subtitle: String,
+    val text: String?,
+    val status: String?
+)
+
 @Composable
-private fun OcrTextSection(text: String) {
+private fun OcrTextSections(
+    itemText: String?,
+    itemKind: String,
+    attachments: List<AttachmentEntity>,
+    autoScanEnabled: Boolean
+) {
+    val attachmentDocs = attachments
+        .filter { isIndexableKind(it.kind) }
+        .mapIndexed { index, attachment ->
+            val type = runCatching { ContentType.valueOf(attachment.kind) }.getOrDefault(ContentType.FILE)
+            OcrDocText(
+                title = "${type.displayLabel()} ${index + 1}",
+                subtitle = if (type == ContentType.PDF) "Extracted from this PDF" else "Extracted from this image",
+                text = attachment.ocrText,
+                status = ocrStatusText(attachment.ocrText, autoScanEnabled, type)
+            )
+        }
+
+    val docs = if (attachmentDocs.isNotEmpty()) {
+        val hasAttachmentText = attachmentDocs.any { !it.text.isNullOrBlank() }
+        if (hasAttachmentText) attachmentDocs else {
+            attachmentDocs + OcrDocText(
+                title = "Combined extracted text",
+                subtitle = "Older saves may store OCR as one combined result",
+                text = itemText,
+                status = ocrStatusText(itemText, autoScanEnabled, runCatching { ContentType.valueOf(itemKind) }.getOrDefault(ContentType.FILE))
+            )
+        }
+    } else {
+        listOf(
+            OcrDocText(
+                title = "Extracted text",
+                subtitle = "From this ${runCatching { ContentType.valueOf(itemKind) }.getOrDefault(ContentType.FILE).displayLabel().lowercase()}",
+                text = itemText,
+                status = ocrStatusText(itemText, autoScanEnabled, runCatching { ContentType.valueOf(itemKind) }.getOrDefault(ContentType.FILE))
+            )
+        )
+    }
+
+    Text(
+        "Extracted text",
+        style = MaterialTheme.typography.titleMedium
+    )
+    Spacer(Modifier.height(8.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        docs.forEach { doc ->
+            OcrTextSection(doc)
+        }
+    }
+}
+
+private fun ocrStatusText(text: String?, autoScanEnabled: Boolean, type: ContentType): String? {
+    if (!text.isNullOrBlank()) return null
+    if (!autoScanEnabled) return "Text recognition is off for this save."
+    return if (type == ContentType.PDF) {
+        "No extracted text yet. It may still be indexing, the PDF may be scanned/locked, or text may be outside the selected page limit."
+    } else {
+        "No extracted text yet. It may still be indexing or the image may not contain readable text."
+    }
+}
+
+private fun ContentType.displayLabel(): String = when (this) {
+    ContentType.IMAGE -> "Image"
+    ContentType.PDF -> "PDF"
+    ContentType.TEXT -> "Text"
+    ContentType.NOTE -> "Note"
+    ContentType.LINK -> "Link"
+    ContentType.FILE -> "File"
+}
+
+@Composable
+private fun OcrTextSection(doc: OcrDocText) {
     var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val ctx = LocalContext.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Text from image",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                "Long-press to select a line or drag for multiple lines.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        IconButton(
-            onClick = {
-                clipboard.setText(AnnotatedString(text))
-                Toast.makeText(ctx, "Extracted text copied", Toast.LENGTH_SHORT).show()
-            }
-        ) {
-            Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy all extracted text")
-        }
-    }
-    Spacer(Modifier.height(8.dp))
-    Box(
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(16.dp)
     ) {
-        SelectionContainer {
-            Text(
-                text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = if (expanded) Int.MAX_VALUE else 6,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    doc.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    doc.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!doc.text.isNullOrBlank()) {
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(doc.text))
+                        Toast.makeText(ctx, "Extracted text copied", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy all extracted text")
+                }
+            }
         }
-    }
-    if (text.lineSequence().count() > 6 || text.length > 360) {
-        androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Show less" else "Show all")
+        Spacer(Modifier.height(8.dp))
+        if (doc.text.isNullOrBlank()) {
+            Text(
+                doc.status.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text(
+                "Long-press to select a line or drag for multiple lines.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            SelectionContainer {
+                Text(
+                    doc.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = if (expanded) Int.MAX_VALUE else 6,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+            if (doc.text.lineSequence().count() > 6 || doc.text.length > 360) {
+                androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Show less" else "Show all")
+                }
+            }
         }
     }
 }

@@ -267,8 +267,8 @@ class SaveSheetViewModel @Inject constructor(
                 }
             }
             if (s.contentType == ContentType.PDF) {
-                rows.forEach { row ->
-                    PdfTextWorker.enqueue(appContext, target.id, row.uri)
+                rows.zip(attIds).forEach { (row, id) ->
+                    PdfTextWorker.enqueue(appContext, target.id, row.uri, id)
                 }
             }
         }

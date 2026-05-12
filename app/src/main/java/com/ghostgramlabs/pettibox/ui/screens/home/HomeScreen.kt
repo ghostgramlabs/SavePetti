@@ -127,6 +127,16 @@ fun HomeScreen(
 
     val openQuickNote = { pendingShare = IncomingShare() }
 
+    if (state.showOnboarding && !state.isLoading) {
+        HomeOnboardingDialog(
+            onDismiss = viewModel::completeOnboarding,
+            onAdd = {
+                viewModel.completeOnboarding()
+                showChooser = true
+            }
+        )
+    }
+
     pendingShare?.let { share ->
         SaveSheet(
             incoming = share,
@@ -310,6 +320,85 @@ fun HomeScreen(
         }
     }
 }
+
+@Composable
+private fun HomeOnboardingDialog(
+    onDismiss: () -> Unit,
+    onAdd: () -> Unit
+) {
+    var page by remember { mutableStateOf(0) }
+    val steps = listOf(
+        OnboardingStep(
+            icon = Icons.Rounded.Share,
+            title = "Save from any app",
+            body = "Tap Share in YouTube, Instagram, Chrome, Photos, or Files, then choose PettiBox."
+        ),
+        OnboardingStep(
+            icon = Icons.Rounded.GridView,
+            title = "Pick a collection",
+            body = "Choose a collection while saving so links, screenshots, PDFs, and notes stay organized."
+        ),
+        OnboardingStep(
+            icon = Icons.Rounded.Search,
+            title = "Find it later",
+            body = "Search titles, notes, tags, links, and text extracted from images or PDFs."
+        )
+    )
+    val current = steps[page]
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(current.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+        },
+        title = { Text(current.title, fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column {
+                Text(current.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    steps.indices.forEach { i ->
+                        Box(
+                            Modifier
+                                .size(width = if (i == page) 24.dp else 8.dp, height = 8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (i == page) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant
+                                )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (page < steps.lastIndex) page++ else onAdd()
+                }
+            ) {
+                Text(if (page < steps.lastIndex) "Next" else "Add first save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Skip") }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+private data class OnboardingStep(
+    val icon: ImageVector,
+    val title: String,
+    val body: String
+)
 
 @Composable
 private fun IndexingStatusChip(modifier: Modifier = Modifier) {

@@ -26,6 +26,7 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
+    val pdfPageLimit: Flow<Int> = ocrPreferences.pdfPageLimit
     val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
@@ -80,6 +81,10 @@ class SettingsViewModel @Inject constructor(
 
     suspend fun setAutoScanOcr(enabled: Boolean) {
         ocrPreferences.setAutoScan(enabled)
+    }
+
+    suspend fun setPdfPageLimit(limit: Int) {
+        ocrPreferences.setPdfPageLimit(limit)
     }
 
     suspend fun scanExistingSaves(): Int {

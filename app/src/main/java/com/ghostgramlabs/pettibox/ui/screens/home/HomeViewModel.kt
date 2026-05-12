@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorkTags
+import com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,12 +37,14 @@ data class HomeState(
     val categories: List<CategoryEntity> = emptyList(),
     val sources: List<SourceCount> = emptyList(),
     val totalCount: Int = 0,
-    val isIndexingText: Boolean = false
+    val isIndexingText: Boolean = false,
+    val showOnboarding: Boolean = false
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repo: SaveRepository,
+    private val onboardingPreferences: OnboardingPreferences,
     @ApplicationContext appContext: Context
 ) : ViewModel() {
     private val isTextIndexing = textIndexingFlow(appContext)
@@ -58,7 +61,8 @@ class HomeViewModel @Inject constructor(
         repo.observeCategories(),
         repo.observeSourceCounts(),
         repo.observeTotal(),
-        isTextIndexing
+        isTextIndexing,
+        onboardingPreferences.showHomeOnboarding
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val recent = args[0] as List<SaveItemEntity>
@@ -68,6 +72,7 @@ class HomeViewModel @Inject constructor(
         val rawCounts = args[4] as List<com.ghostgramlabs.pettibox.data.local.SourceCount>
         val total = args[5] as Int
         val indexing = args[6] as Boolean
+        val showOnboarding = args[7] as Boolean
 
         val sources = rawCounts.mapNotNull { sc ->
             val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
@@ -82,7 +87,8 @@ class HomeViewModel @Inject constructor(
             categories = cats,
             sources = sources,
             totalCount = total,
-            isIndexingText = indexing
+            isIndexingText = indexing,
+            showOnboarding = showOnboarding
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
@@ -91,6 +97,10 @@ class HomeViewModel @Inject constructor(
     }
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
+
+    fun completeOnboarding() = viewModelScope.launch {
+        onboardingPreferences.markHomeOnboardingComplete()
+    }
 }
 
 private fun textIndexingFlow(context: Context): Flow<Boolean> = flow {

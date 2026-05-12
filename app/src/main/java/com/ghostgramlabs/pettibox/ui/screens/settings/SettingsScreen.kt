@@ -58,6 +58,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
+import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import kotlinx.coroutines.launch
@@ -77,6 +78,9 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val localBackupPath = remember { viewModel.localBackupPath() }
     val autoScanOcr by viewModel.autoScanOcr.collectAsStateWithLifecycle(initialValue = true)
+    val pdfPageLimit by viewModel.pdfPageLimit.collectAsStateWithLifecycle(
+        initialValue = OcrPreferences.DEFAULT_PDF_PAGES
+    )
     val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle(
         initialValue = LocalBackupStatus(
             enabled = false,
@@ -196,6 +200,32 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Text("Scan existing saves", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "PDF scan limit",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Higher limits make more pages searchable, but large PDFs take longer.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OcrPreferences.PDF_PAGE_LIMIT_OPTIONS.forEach { limit ->
+                        PageLimitChoice(
+                            limit = limit,
+                            selected = pdfPageLimit == limit,
+                            onClick = {
+                                scope.launch {
+                                    viewModel.setPdfPageLimit(limit)
+                                    snackbarHostState.showSnackbar("PDF scan limit set to $limit pages")
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -496,6 +526,29 @@ private fun HelpItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun PageLimitChoice(
+    limit: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = if (selected) {
+        ButtonDefaults.outlinedButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            contentColor = MaterialTheme.colorScheme.primary
+        )
+    } else {
+        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+    }
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        colors = colors
+    ) {
+        Text("$limit", fontWeight = FontWeight.Bold)
     }
 }
 
