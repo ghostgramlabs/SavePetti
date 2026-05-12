@@ -1,6 +1,7 @@
 package com.ghostgramlabs.pettibox.ui.screens.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorker
 import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
@@ -9,6 +10,7 @@ import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -20,6 +22,33 @@ class SettingsViewModel @Inject constructor(
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
+
+    suspend fun exportBackupZipFile(): Pair<File, SaveRepository.BackupExportResult> {
+        val file = File(appContext.cacheDir, "pettibox-backup-${System.currentTimeMillis()}.zip")
+        val result = repo.exportBackupZip(file)
+        return file to result
+    }
+
+    suspend fun importBackupJson(json: String): SaveRepository.BackupImportResult =
+        repo.importBackupJson(json)
+
+    suspend fun importBackupUri(uri: Uri): SaveRepository.BackupImportResult {
+        val name = appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+        }.orEmpty()
+        val mimeType = appContext.contentResolver.getType(uri).orEmpty()
+        val isZip = name.endsWith(".zip", ignoreCase = true) ||
+            mimeType.equals("application/zip", ignoreCase = true) ||
+            mimeType.equals("application/x-zip-compressed", ignoreCase = true)
+        return appContext.contentResolver.openInputStream(uri)?.use { input ->
+            if (isZip) {
+                repo.importBackupZip(input)
+            } else {
+                repo.importBackupJson(input.bufferedReader().use { it.readText() })
+            }
+        } ?: error("Could not open backup")
+    }
 
     suspend fun setAutoScanOcr(enabled: Boolean) {
         ocrPreferences.setAutoScan(enabled)

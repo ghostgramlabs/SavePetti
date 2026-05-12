@@ -18,6 +18,10 @@ import com.ghostgramlabs.pettibox.domain.model.CategoryPalette
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.InputStream
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +33,19 @@ class SaveRepository @Inject constructor(
     private val tagDao: TagDao,
     private val attachmentStore: AttachmentStore
 ) {
+
+    data class BackupImportResult(
+        val categories: Int,
+        val saves: Int,
+        val attachments: Int,
+        val tags: Int
+    )
+
+    data class BackupExportResult(
+        val saves: Int,
+        val attachments: Int,
+        val embeddedFiles: Int
+    )
 
     suspend fun seedCategoriesIfEmpty() {
         val defaults = CategoryPalette.Defaults.mapIndexed { i, p ->
@@ -173,6 +190,249 @@ class SaveRepository @Inject constructor(
         return root.toString(2)
     }
 
+    suspend fun exportBackupZip(targetFile: File): BackupExportResult {
+        val categories = categoryDao.allForExport()
+        val saves = saveDao.allForExport()
+        val attachments = attachmentDao.allForExport()
+        val tags = tagDao.allForExport()
+        val itemTags = tagDao.linksForExport()
+        var embeddedFiles = 0
+
+        val root = JSONObject()
+            .put("schema", 2)
+            .put("exportedAt", System.currentTimeMillis())
+
+        targetFile.parentFile?.mkdirs()
+        ZipOutputStream(targetFile.outputStream().buffered()).use { zip ->
+            root.put("categories", JSONArray().apply {
+                categories.forEach { c ->
+                    put(JSONObject()
+                        .put("id", c.id)
+                        .put("name", c.name)
+                        .put("emoji", c.emoji)
+                        .put("colorHex", c.colorHex)
+                        .put("sortOrder", c.sortOrder)
+                        .put("parentId", c.parentId)
+                        .put("userCreated", c.userCreated)
+                        .put("createdAt", c.createdAt))
+                }
+            })
+
+            root.put("saves", JSONArray().apply {
+                saves.forEach { s ->
+                    val localBackupPath = s.localUri?.let { uri ->
+                        val path = "files/save_${s.id}_${safeExt(uri)}"
+                        if (attachmentStore.copyUriToZip(uri, zip, path)) {
+                            embeddedFiles++
+                            path
+                        } else null
+                    }
+                    put(JSONObject()
+                        .put("id", s.id)
+                        .put("title", s.title)
+                        .put("url", s.url)
+                        .put("localUri", s.localUri)
+                        .put("localBackupPath", localBackupPath)
+                        .put("thumbnailUri", s.thumbnailUri)
+                        .put("contentType", s.contentType)
+                        .put("sourceApp", s.sourceApp)
+                        .put("categoryId", s.categoryId)
+                        .put("notes", s.notes)
+                        .put("ocrText", s.ocrText)
+                        .put("metadataJson", s.metadataJson)
+                        .put("favorite", s.isFavorite)
+                        .put("pinned", s.isPinned)
+                        .put("createdAt", s.createdAt)
+                        .put("updatedAt", s.updatedAt)
+                        .put("openedAt", s.openedAt))
+                }
+            })
+
+            root.put("attachments", JSONArray().apply {
+                attachments.forEach { a ->
+                    val backupPath = a.uri.let { uri ->
+                        val path = "files/attachment_${a.id}_${safeExt(uri)}"
+                        if (attachmentStore.copyUriToZip(uri, zip, path)) {
+                            embeddedFiles++
+                            path
+                        } else null
+                    }
+                    put(JSONObject()
+                        .put("id", a.id)
+                        .put("itemId", a.itemId)
+                        .put("uri", a.uri)
+                        .put("backupPath", backupPath)
+                        .put("kind", a.kind)
+                        .put("ocrText", a.ocrText)
+                        .put("sortOrder", a.sortOrder)
+                        .put("createdAt", a.createdAt))
+                }
+            })
+
+            root.put("tags", JSONArray().apply {
+                tags.forEach { t ->
+                    put(JSONObject().put("id", t.id).put("name", t.name).put("createdAt", t.createdAt))
+                }
+            })
+            root.put("itemTags", JSONArray().apply {
+                itemTags.forEach { ref ->
+                    put(JSONObject().put("itemId", ref.itemId).put("tagId", ref.tagId))
+                }
+            })
+
+            zip.putNextEntry(java.util.zip.ZipEntry("backup.json"))
+            zip.write(root.toString(2).toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+
+        return BackupExportResult(
+            saves = saves.size,
+            attachments = attachments.size,
+            embeddedFiles = embeddedFiles
+        )
+    }
+
+    suspend fun importBackupZip(input: InputStream): BackupImportResult {
+        var backupJson: String? = null
+        val fileUrisByPath = mutableMapOf<String, String>()
+        ZipInputStream(input.buffered()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.isDirectory) {
+                    zip.closeEntry()
+                    continue
+                }
+                when {
+                    entry.name == "backup.json" -> {
+                        backupJson = zip.readBytes().toString(Charsets.UTF_8)
+                    }
+                    entry.name.startsWith("files/") -> {
+                        attachmentStore.ingestBackupFile(
+                            input = NonClosingInputStream(zip),
+                            originalName = entry.name.substringAfterLast('/')
+                        )?.let { uri ->
+                            fileUrisByPath[entry.name] = uri
+                        }
+                    }
+                }
+                zip.closeEntry()
+            }
+        }
+        val json = backupJson ?: error("Missing backup.json")
+        return importBackupJson(json, fileUrisByPath)
+    }
+
+    suspend fun importBackupJson(json: String): BackupImportResult =
+        importBackupJson(json, emptyMap())
+
+    private suspend fun importBackupJson(
+        json: String,
+        fileUrisByPath: Map<String, String>
+    ): BackupImportResult {
+        val root = JSONObject(json)
+        val categories = root.optJSONArray("categories") ?: JSONArray()
+        val saves = root.optJSONArray("saves") ?: JSONArray()
+        val attachments = root.optJSONArray("attachments") ?: JSONArray()
+        val tags = root.optJSONArray("tags") ?: JSONArray()
+        val itemTags = root.optJSONArray("itemTags") ?: JSONArray()
+
+        var categoryCount = 0
+        for (i in 0 until categories.length()) {
+            val c = categories.getJSONObject(i)
+            val category = CategoryEntity(
+                id = c.getString("id"),
+                name = c.optString("name", "Imported"),
+                emoji = c.optString("emoji", "\uD83D\uDCE6"),
+                colorHex = c.optLong("colorHex", 0xFF8B5CF6.toLong()),
+                sortOrder = c.optInt("sortOrder", i),
+                parentId = c.optNullableString("parentId"),
+                userCreated = c.optBoolean("userCreated", true),
+                createdAt = c.optLong("createdAt", System.currentTimeMillis())
+            )
+            categoryDao.upsert(category)
+            categoryCount++
+        }
+
+        val itemIdMap = mutableMapOf<Long, Long>()
+        var saveCount = 0
+        for (i in 0 until saves.length()) {
+            val s = saves.getJSONObject(i)
+            val oldId = s.optLong("id", -1L)
+            val imported = SaveItemEntity(
+                title = s.optString("title", "Imported save").ifBlank { "Imported save" },
+                url = s.optNullableString("url"),
+                localUri = s.optNullableString("localBackupPath")?.let { fileUrisByPath[it] }
+                    ?: s.optNullableString("localUri"),
+                thumbnailUri = s.optNullableString("thumbnailUri"),
+                contentType = s.optString("contentType", "NOTE"),
+                sourceApp = s.optString("sourceApp", "UNKNOWN"),
+                categoryId = s.optNullableString("categoryId"),
+                notes = s.optNullableString("notes"),
+                ocrText = s.optNullableString("ocrText"),
+                metadataJson = s.optNullableString("metadataJson"),
+                isFavorite = s.optBoolean("favorite", false),
+                isPinned = s.optBoolean("pinned", false),
+                createdAt = s.optLong("createdAt", System.currentTimeMillis()),
+                updatedAt = s.optLong("updatedAt", System.currentTimeMillis()),
+                openedAt = s.optNullableLong("openedAt")
+            )
+            val newId = saveDao.insert(imported)
+            if (oldId > 0) itemIdMap[oldId] = newId
+            saveCount++
+        }
+
+        var attachmentCount = 0
+        val attachmentRows = buildList {
+            for (i in 0 until attachments.length()) {
+                val a = attachments.getJSONObject(i)
+                val newItemId = itemIdMap[a.optLong("itemId", -1L)] ?: continue
+                add(
+                    AttachmentEntity(
+                        itemId = newItemId,
+                        uri = a.optNullableString("backupPath")?.let { fileUrisByPath[it] }
+                            ?: a.optString("uri"),
+                        kind = a.optString("kind", "FILE"),
+                        ocrText = a.optNullableString("ocrText"),
+                        sortOrder = a.optInt("sortOrder", i),
+                        createdAt = a.optLong("createdAt", System.currentTimeMillis())
+                    )
+                )
+            }
+        }
+        if (attachmentRows.isNotEmpty()) {
+            attachmentDao.insertAll(attachmentRows)
+            attachmentCount = attachmentRows.size
+        }
+
+        val tagIdMap = mutableMapOf<Long, Long>()
+        var tagCount = 0
+        for (i in 0 until tags.length()) {
+            val t = tags.getJSONObject(i)
+            val name = t.optString("name").trim()
+            if (name.isBlank()) continue
+            val newId = tagDao.upsert(name)
+            if (newId > 0) {
+                val oldId = t.optLong("id", -1L)
+                if (oldId > 0) tagIdMap[oldId] = newId
+                tagCount++
+            }
+        }
+
+        for (i in 0 until itemTags.length()) {
+            val ref = itemTags.getJSONObject(i)
+            val newItemId = itemIdMap[ref.optLong("itemId", -1L)] ?: continue
+            val newTagId = tagIdMap[ref.optLong("tagId", -1L)] ?: continue
+            tagDao.link(ItemTagCrossRef(newItemId, newTagId))
+        }
+
+        return BackupImportResult(
+            categories = categoryCount,
+            saves = saveCount,
+            attachments = attachmentCount,
+            tags = tagCount
+        )
+    }
+
     // ── Attachments ───────────────────────────────────────────────────────
 
     suspend fun insertAttachments(items: List<AttachmentEntity>): List<Long> =
@@ -232,5 +492,24 @@ class SaveRepository @Inject constructor(
         val tokens = cleaned.split(Regex("\\s+")).filter { it.length >= 2 }
         if (tokens.isEmpty()) return ""
         return tokens.joinToString(" ") { "$it*" }
+    }
+
+    private fun safeExt(uri: String): String {
+        val clean = uri.substringBefore('?').substringAfterLast('/', uri).substringAfterLast('.', "bin")
+        return clean.takeIf { it.length in 1..8 && it.all { ch -> ch.isLetterOrDigit() } } ?: "bin"
+    }
+
+    private fun JSONObject.optNullableString(name: String): String? =
+        if (!has(name) || isNull(name)) null else optString(name).ifBlank { null }
+
+    private fun JSONObject.optNullableLong(name: String): Long? =
+        if (!has(name) || isNull(name)) null else optLong(name)
+
+    private class NonClosingInputStream(
+        private val delegate: InputStream
+    ) : InputStream() {
+        override fun read(): Int = delegate.read()
+        override fun read(b: ByteArray, off: Int, len: Int): Int = delegate.read(b, off, len)
+        override fun close() = Unit
     }
 }

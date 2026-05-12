@@ -9,7 +9,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,6 +44,43 @@ class AttachmentStore @Inject constructor(
             } ?: return@runCatching null
             target.toUri().toString()
         }.getOrNull()
+    }
+
+    suspend fun ingestBackupFile(input: InputStream, originalName: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val ext = originalName.substringAfterLast('.', "bin").ifBlank { "bin" }
+            val target = File(baseDir, "${UUID.randomUUID()}.$ext")
+            input.use { source ->
+                target.outputStream().use { output -> source.copyTo(output) }
+            }
+            target.toUri().toString()
+        }.getOrNull()
+    }
+
+    suspend fun copyUriToZip(
+        uriString: String?,
+        zip: ZipOutputStream,
+        entryName: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (uriString.isNullOrBlank()) return@withContext false
+        runCatching {
+            val uri = Uri.parse(uriString)
+            val input = when (uri.scheme) {
+                "file" -> {
+                    val file = File(uri.path ?: return@runCatching false)
+                    if (!file.exists()) return@runCatching false
+                    file.inputStream()
+                }
+                "content" -> ctx.contentResolver.openInputStream(uri) ?: return@runCatching false
+                else -> return@runCatching false
+            }
+            input.use {
+                zip.putNextEntry(ZipEntry(entryName))
+                it.copyTo(zip)
+                zip.closeEntry()
+            }
+            true
+        }.getOrDefault(false)
     }
 
     /**

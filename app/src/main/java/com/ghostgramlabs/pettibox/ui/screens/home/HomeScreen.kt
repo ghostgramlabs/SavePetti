@@ -211,10 +211,10 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 EmptyState(
-                    emoji = "\u2728",
-                    headline = "Your shelf is empty",
-                    body = "Share something into PettiBox from any app - or tap below to jot a quick note.",
-                    cta = "Add a quick note",
+                    emoji = "\uD83D\uDCE5",
+                    headline = "PettiBox lives in your Share menu",
+                    body = "In YouTube, Instagram, Chrome, Photos, or Files, tap Share and choose PettiBox. Pick a collection and it becomes searchable.",
+                    cta = "Add something now",
                     onCta = openQuickNote,
                     fillScreen = false
                 )
@@ -382,27 +382,27 @@ private fun FirstRunGuide(
             .padding(16.dp)
     ) {
         Text(
-            "PettiBox in 3 steps",
+            "Save from any app",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
             color = scheme.onSurface
         )
         Spacer(Modifier.height(12.dp))
         GuideStep(
             icon = Icons.Rounded.Share,
-            title = "Share into PettiBox",
-            body = "Links, screenshots, PDFs, text, and quick notes land here."
-        )
-        Spacer(Modifier.height(10.dp))
-        GuideStep(
-            icon = Icons.Rounded.Search,
-            title = "Search everything",
-            body = "Titles, notes, sources, and OCR text are searchable."
+            title = "Tap Share",
+            body = "When something is worth keeping, tap Share in the app you're using."
         )
         Spacer(Modifier.height(10.dp))
         GuideStep(
             icon = Icons.Rounded.GridView,
-            title = "Browse by collection",
-            body = "Use categories to keep saved things easy to find later."
+            title = "Choose PettiBox",
+            body = "Pick a collection and it saves instantly to your shelf."
+        )
+        Spacer(Modifier.height(10.dp))
+        GuideStep(
+            icon = Icons.Rounded.Search,
+            title = "Find it later",
+            body = "Search links, notes, files, screenshots, PDFs, and text inside images."
         )
         Spacer(Modifier.height(14.dp))
         Row(
@@ -421,7 +421,7 @@ private fun FirstRunGuide(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                "Try a quick note",
+                "Add something now",
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 color = scheme.onPrimary
             )
