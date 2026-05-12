@@ -225,7 +225,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Text recognition is optional",
-                    body = "Auto-scan makes screenshots and PDFs searchable. Turn it off if you only want to store files without extracting text.",
+                    body = "Auto-scan makes screenshots and PDFs searchable. Large PDFs are indexed for the first 30 pages to keep the app fast.",
                     icon = Icons.AutoMirrored.Rounded.TextSnippet
                 )
                 HelpItem(

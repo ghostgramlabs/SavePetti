@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,12 +27,14 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
@@ -67,7 +70,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -652,10 +657,32 @@ private fun IndexingTextSection() {
 @Composable
 private fun OcrTextSection(text: String) {
     var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    Text(
-        "Text from image",
-        style = MaterialTheme.typography.titleMedium
-    )
+    val clipboard = LocalClipboardManager.current
+    val ctx = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Text from image",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                "Long-press to select a line or drag for multiple lines.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(
+            onClick = {
+                clipboard.setText(AnnotatedString(text))
+                Toast.makeText(ctx, "Extracted text copied", Toast.LENGTH_SHORT).show()
+            }
+        ) {
+            Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy all extracted text")
+        }
+    }
     Spacer(Modifier.height(8.dp))
     Box(
         Modifier
@@ -664,13 +691,15 @@ private fun OcrTextSection(text: String) {
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(16.dp)
     ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = if (expanded) Int.MAX_VALUE else 6,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-        )
+        SelectionContainer {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = if (expanded) Int.MAX_VALUE else 6,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
     if (text.lineSequence().count() > 6 || text.length > 360) {
         androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
