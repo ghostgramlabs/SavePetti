@@ -9,6 +9,7 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorkTags
 import com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences
+import com.ghostgramlabs.pettibox.data.reminders.ReminderWorker
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,7 +46,7 @@ data class HomeState(
 class HomeViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val onboardingPreferences: OnboardingPreferences,
-    @ApplicationContext appContext: Context
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     private val isTextIndexing = textIndexingFlow(appContext)
 
@@ -102,6 +103,33 @@ class HomeViewModel @Inject constructor(
 
     fun toggleFavorite(item: SaveItemEntity) = viewModelScope.launch {
         repo.setFavorite(item.id, !item.isFavorite)
+    }
+
+    fun togglePinned(item: SaveItemEntity) = viewModelScope.launch {
+        repo.setPinned(item.id, !item.isPinned)
+    }
+
+    fun toggleArchived(item: SaveItemEntity) = viewModelScope.launch {
+        repo.setArchived(item.id, !item.isArchived)
+        if (!item.isArchived && item.remindAt != null) {
+            repo.setRemindAt(item.id, null)
+            ReminderWorker.cancel(appContext, item.id)
+        }
+    }
+
+    fun setRemindAt(item: SaveItemEntity, at: Long?) = viewModelScope.launch {
+        repo.setRemindAt(item.id, at)
+        if (at != null) ReminderWorker.schedule(appContext, item.id, at)
+        else ReminderWorker.cancel(appContext, item.id)
+    }
+
+    fun moveTo(item: SaveItemEntity, categoryId: String?) = viewModelScope.launch {
+        repo.update(item.copy(categoryId = categoryId, updatedAt = System.currentTimeMillis()))
+    }
+
+    fun delete(item: SaveItemEntity) = viewModelScope.launch {
+        ReminderWorker.cancel(appContext, item.id)
+        repo.delete(item.id)
     }
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()

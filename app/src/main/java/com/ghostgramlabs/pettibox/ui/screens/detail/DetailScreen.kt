@@ -32,6 +32,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -87,6 +90,9 @@ import com.ghostgramlabs.pettibox.data.util.TimeFormat
 import com.ghostgramlabs.pettibox.domain.model.ContentType
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
+import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -105,6 +111,8 @@ fun DetailScreen(
     val haptics = LocalHapticFeedback.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
+    var showReminderSheet by remember { mutableStateOf(false) }
+    var showCustomReminder by remember { mutableStateOf(false) }
     // Per-attachment delete is two-stage: a confirm dialog, then an
     // optimistic hide + Undo snackbar. We commit the actual repo delete
     // only after the snackbar dismisses without Undo, so files survive
@@ -149,6 +157,40 @@ fun DetailScreen(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             },
             shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    if (showReminderSheet) {
+        ReminderPickerSheet(
+            currentRemindAt = item?.remindAt,
+            onPick = { at ->
+                showReminderSheet = false
+                viewModel.setRemindAt(at)
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        if (at != null) "We'll remind you " + formatReminderAt(at)
+                        else "Reminder cleared"
+                    )
+                }
+            },
+            onCustom = {
+                showReminderSheet = false
+                showCustomReminder = true
+            },
+            onDismiss = { showReminderSheet = false }
+        )
+    }
+
+    if (showCustomReminder) {
+        ReminderCustomDialog(
+            onConfirm = { at ->
+                showCustomReminder = false
+                viewModel.setRemindAt(at)
+                scope.launch {
+                    snackbarHostState.showSnackbar("We'll remind you " + formatReminderAt(at))
+                }
+            },
+            onDismiss = { showCustomReminder = false }
         )
     }
 
@@ -200,6 +242,35 @@ fun DetailScreen(
                             if (item?.isFavorite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = if (item?.isFavorite == true) "Unfavorite" else "Favorite",
                             tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = { showReminderSheet = true }) {
+                        Icon(
+                            Icons.Rounded.AccessTime,
+                            contentDescription = if (item?.remindAt != null) "Reminder set" else "Remind me",
+                            tint = if (item?.remindAt != null)
+                                MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    IconButton(onClick = {
+                        item?.let {
+                            val nowArchived = it.isArchived
+                            viewModel.setArchived(!nowArchived)
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = if (!nowArchived) "Archived" else "Unarchived",
+                                    actionLabel = "Undo"
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.setArchived(nowArchived)
+                                }
+                            }
+                        }
+                    }) {
+                        Icon(
+                            if (item?.isArchived == true) Icons.Rounded.Unarchive else Icons.Rounded.Archive,
+                            contentDescription = if (item?.isArchived == true) "Unarchive" else "Archive"
                         )
                     }
                     IconButton(onClick = {

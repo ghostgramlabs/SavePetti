@@ -4,10 +4,8 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 /**
- * Schema v1 — clean baseline. No migrations needed yet. When schema bumps
- * happen, add a real [androidx.room.migration.Migration] in [Migrations] and
- * register it in the Hilt module — never re-enable
- * `fallbackToDestructiveMigration` in production.
+ * Schema v2 — adds is_archived + remind_at columns on save_items for the
+ * archive and reminders features. See [MIGRATION_1_2] for the migration.
  */
 @Database(
     entities = [
@@ -18,7 +16,7 @@ import androidx.room.RoomDatabase
         TagEntity::class,
         ItemTagCrossRef::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

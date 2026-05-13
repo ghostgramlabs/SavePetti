@@ -64,14 +64,16 @@ interface SaveDao {
     suspend fun pdfItemsNeedingOcr(): List<SaveItemEntity>
 
     // ── Hot, capped browses (Home) ───────────────────────────────────────
+    // Home views hide archived items. Search (FTS + browseForSearch) still
+    // returns them so "I'm done with this" doesn't make a save unfindable.
 
-    @Query("SELECT * FROM save_items ORDER BY created_at DESC LIMIT :limit")
+    @Query("SELECT * FROM save_items WHERE is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
     fun observeRecent(limit: Int = 20): Flow<List<SaveItemEntity>>
 
-    @Query("SELECT * FROM save_items WHERE is_pinned = 1 ORDER BY updated_at DESC LIMIT :limit")
+    @Query("SELECT * FROM save_items WHERE is_pinned = 1 AND is_archived = 0 ORDER BY updated_at DESC LIMIT :limit")
     fun observePinned(limit: Int = 12): Flow<List<SaveItemEntity>>
 
-    @Query("SELECT * FROM save_items WHERE is_favorite = 1 ORDER BY created_at DESC LIMIT :limit")
+    @Query("SELECT * FROM save_items WHERE is_favorite = 1 AND is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
     fun observeFavorites(limit: Int = 12): Flow<List<SaveItemEntity>>
 
     // ── Paged browses (Categories drill-in, future "all saves") ──────────
@@ -79,35 +81,39 @@ interface SaveDao {
     @Query(
         """
         SELECT * FROM save_items
-        WHERE category_id = :categoryId
+        WHERE category_id = :categoryId AND is_archived = :includeArchived
         ORDER BY is_pinned DESC, created_at DESC
         """
     )
-    fun pagedByCategory(categoryId: String): PagingSource<Int, SaveItemEntity>
+    fun pagedByCategory(categoryId: String, includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity>
 
     @Query(
         """
         SELECT * FROM save_items
+        WHERE is_archived = :includeArchived
         ORDER BY is_pinned DESC, created_at DESC
         """
     )
-    fun pagedAll(): PagingSource<Int, SaveItemEntity>
+    fun pagedAll(includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity>
 
     @Query(
         """
         SELECT * FROM save_items
-        WHERE source_app = :sourceApp
+        WHERE source_app = :sourceApp AND is_archived = 0
         ORDER BY is_pinned DESC, created_at DESC
         """
     )
     fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity>
 
     // ── Aggregate queries: avoid loading rows just to count ───────────────
+    // Counts also exclude archived so the user's home dashboard reflects
+    // their "live" shelf size.
 
     @Query(
         """
         SELECT source_app AS source, COUNT(*) AS count
         FROM save_items
+        WHERE is_archived = 0
         GROUP BY source_app
         ORDER BY count DESC
         """
@@ -118,14 +124,23 @@ interface SaveDao {
         """
         SELECT category_id AS categoryId, COUNT(*) AS count
         FROM save_items
-        WHERE category_id IS NOT NULL
+        WHERE category_id IS NOT NULL AND is_archived = 0
         GROUP BY category_id
         """
     )
     fun observeCategoryCounts(): Flow<List<CategoryCount>>
 
-    @Query("SELECT COUNT(*) FROM save_items")
+    @Query("SELECT COUNT(*) FROM save_items WHERE is_archived = 0")
     fun observeTotal(): Flow<Int>
+
+    // ── Reminders ─────────────────────────────────────────────────────────
+
+    @Query("SELECT * FROM save_items WHERE remind_at IS NOT NULL AND remind_at <= :now AND is_archived = 0 ORDER BY remind_at ASC")
+    suspend fun dueReminders(now: Long = System.currentTimeMillis()): List<SaveItemEntity>
+
+    /** All items with a pending reminder, regardless of whether it has fired yet. */
+    @Query("SELECT * FROM save_items WHERE remind_at IS NOT NULL AND is_archived = 0 ORDER BY remind_at ASC")
+    suspend fun pendingReminders(): List<SaveItemEntity>
 
     // ── Mutations ────────────────────────────────────────────────────────
 
@@ -134,6 +149,12 @@ interface SaveDao {
 
     @Query("UPDATE save_items SET is_pinned = :pin, updated_at = :ts WHERE id = :id")
     suspend fun setPinned(id: Long, pin: Boolean, ts: Long = System.currentTimeMillis())
+
+    @Query("UPDATE save_items SET is_archived = :archived, updated_at = :ts WHERE id = :id")
+    suspend fun setArchived(id: Long, archived: Boolean, ts: Long = System.currentTimeMillis())
+
+    @Query("UPDATE save_items SET remind_at = :at, updated_at = :ts WHERE id = :id")
+    suspend fun setRemindAt(id: Long, at: Long?, ts: Long = System.currentTimeMillis())
 
     @Query("UPDATE save_items SET opened_at = :ts WHERE id = :id")
     suspend fun touchOpened(id: Long, ts: Long = System.currentTimeMillis())

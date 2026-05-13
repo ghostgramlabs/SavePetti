@@ -35,6 +35,8 @@ import androidx.room.PrimaryKey
         Index("is_favorite"),
         Index("is_pinned"),
         Index("opened_at"),
+        Index("is_archived"),
+        Index("remind_at"),
         Index(value = ["category_id", "created_at"], name = "idx_save_items_cat_time"),
         Index(value = ["source_app", "created_at"], name = "idx_save_items_src_time")
     ]
@@ -53,6 +55,13 @@ data class SaveItemEntity(
     @ColumnInfo(name = "metadata_json") val metadataJson: String? = null,
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean = false,
     @ColumnInfo(name = "is_pinned") val isPinned: Boolean = false,
+    // Soft-deleted ("I'm done with this") items still exist for search and
+    // restore, but disappear from Home and the default Browse view.
+    @ColumnInfo(name = "is_archived") val isArchived: Boolean = false,
+    // Epoch millis at which the user wants a reminder notification. Null
+    // means no reminder pending. The notification clears this back to null
+    // when it fires.
+    @ColumnInfo(name = "remind_at") val remindAt: Long? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "opened_at") val openedAt: Long? = null

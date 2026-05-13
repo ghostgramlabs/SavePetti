@@ -5,6 +5,8 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
+import com.ghostgramlabs.pettibox.data.reminders.ReminderNotifications
+import com.ghostgramlabs.pettibox.data.reminders.ReminderWorker
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,9 @@ class PettiBoxApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Register the notification channel up-front. Idempotent — the OS
+        // ignores duplicate registrations after the first one took effect.
+        ReminderNotifications.ensureChannel(this)
         appScope.launch { repository.seedCategoriesIfEmpty() }
         // Reconcile the saved backup preference with WorkManager state on
         // every cold start. If the user enabled auto-backup but the
@@ -44,6 +49,17 @@ class PettiBoxApp : Application(), Configuration.Provider {
                 LocalBackupWorker.schedule(this@PettiBoxApp)
             } else {
                 LocalBackupWorker.cancel(this@PettiBoxApp)
+            }
+        }
+        // Re-enqueue any reminder workers that should still fire. Worker
+        // state survives reboots normally via WorkManager, but a data
+        // clear or fresh install would lose them — this is the analogue
+        // of the backup-worker reconciliation above. Past-due reminders
+        // fire immediately so the user doesn't lose them entirely.
+        appScope.launch {
+            repository.dueOrPendingReminders().forEach { item ->
+                val at = item.remindAt ?: return@forEach
+                ReminderWorker.schedule(this@PettiBoxApp, item.id, at)
             }
         }
     }

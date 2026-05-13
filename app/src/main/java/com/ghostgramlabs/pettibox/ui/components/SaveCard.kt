@@ -1,8 +1,10 @@
 package com.ghostgramlabs.pettibox.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Image
@@ -72,17 +75,34 @@ fun SaveCard(
     categoryEmoji: String?,
     categoryName: String?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     val type = runCatching { ContentType.valueOf(item.contentType) }.getOrDefault(ContentType.NOTE)
     val source = runCatching { SourceApp.valueOf(item.sourceApp) }.getOrDefault(SourceApp.UNKNOWN)
 
     when (type) {
-        ContentType.IMAGE -> PolaroidCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
-        ContentType.LINK -> LinkBookmarkCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
-        ContentType.NOTE, ContentType.TEXT -> StickyNoteCard(item, accent, source, categoryEmoji, categoryName, onClick, modifier)
-        ContentType.PDF, ContentType.FILE -> PaperclipCard(item, type, accent, source, categoryEmoji, categoryName, onClick, modifier)
+        ContentType.IMAGE -> PolaroidCard(item, accent, source, categoryEmoji, categoryName, onClick, onLongClick, modifier)
+        ContentType.LINK -> LinkBookmarkCard(item, accent, source, categoryEmoji, categoryName, onClick, onLongClick, modifier)
+        ContentType.NOTE, ContentType.TEXT -> StickyNoteCard(item, accent, source, categoryEmoji, categoryName, onClick, onLongClick, modifier)
+        ContentType.PDF, ContentType.FILE -> PaperclipCard(item, type, accent, source, categoryEmoji, categoryName, onClick, onLongClick, modifier)
     }
+}
+
+/**
+ * Card-wide tap modifier — uses `combinedClickable` so long-press is
+ * routed to [onLongClick] (the quick-actions sheet) and short tap to
+ * [onClick] (open detail). Falls back to plain clickable when no long
+ * press callback is provided.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.cardClickable(
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?
+): Modifier = if (onLongClick != null) {
+    this.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+} else {
+    this.clickable(onClick = onClick)
 }
 
 // ── Variants ──────────────────────────────────────────────────────────────
@@ -95,6 +115,7 @@ private fun PolaroidCard(
     categoryEmoji: String?,
     categoryName: String?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
@@ -104,7 +125,7 @@ private fun PolaroidCard(
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFFFDFBF6))
                 .border(1.dp, Color(0xFFE6DFD2), RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
+                .cardClickable(onClick, onLongClick)
                 .padding(8.dp)
         ) {
             Box(
@@ -150,6 +171,7 @@ private fun LinkBookmarkCard(
     categoryEmoji: String?,
     categoryName: String?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -160,7 +182,7 @@ private fun LinkBookmarkCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
-                .clickable(onClick = onClick)
+                .cardClickable(onClick, onLongClick)
                 .drawWithContent {
                     drawContent()
                     drawFoldedCorner(accent.copy(alpha = 0.22f))
@@ -229,6 +251,7 @@ private fun StickyNoteCard(
     categoryEmoji: String?,
     categoryName: String?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier
 ) {
     // Theme-aware sticky tint + ink: bright pastels in light mode (real
@@ -249,7 +272,7 @@ private fun StickyNoteCard(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(4.dp))
                 .background(tint)
-                .clickable(onClick = onClick)
+                .cardClickable(onClick, onLongClick)
                 .padding(14.dp)
         ) {
             Text(
@@ -281,6 +304,10 @@ private fun StickyNoteCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = ink.copy(alpha = 0.6f)
                 )
+                if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Rounded.AccessTime, null, tint = accent, modifier = Modifier.size(13.dp))
+                }
                 if (item.isPinned) {
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(14.dp))
@@ -312,6 +339,7 @@ private fun PaperclipCard(
     categoryEmoji: String?,
     categoryName: String?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -322,7 +350,7 @@ private fun PaperclipCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
-                .clickable(onClick = onClick)
+                .cardClickable(onClick, onLongClick)
         ) {
             Box(
                 Modifier
@@ -404,6 +432,18 @@ private fun FooterMeta(
             color = scheme.onSurfaceVariant
         )
         Spacer(Modifier.weight(1f))
+        // Pending reminder glyph — only shows for future reminders. Past-due
+        // reminders are kept invisible because the worker should be
+        // clearing them imminently; double-rendering them in the card
+        // would just confuse the user.
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            Icon(
+                Icons.Rounded.AccessTime, null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.size(4.dp))
+        }
         if (item.isPinned) {
             Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(16.dp))
         }

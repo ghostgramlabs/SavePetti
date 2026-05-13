@@ -98,9 +98,13 @@ class SaveRepository @Inject constructor(
     suspend fun browseForSearch(): List<SaveItemEntity> = saveDao.browseForSearch()
 
     // Paged browses for large lists.
-    fun pagedAll(): PagingSource<Int, SaveItemEntity> = saveDao.pagedAll()
-    fun pagedByCategory(categoryId: String): PagingSource<Int, SaveItemEntity> =
-        saveDao.pagedByCategory(categoryId)
+    fun pagedAll(includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity> =
+        saveDao.pagedAll(includeArchived)
+    fun pagedByCategory(
+        categoryId: String,
+        includeArchived: Boolean = false
+    ): PagingSource<Int, SaveItemEntity> =
+        saveDao.pagedByCategory(categoryId, includeArchived)
     fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity> =
         saveDao.pagedBySource(sourceApp)
 
@@ -111,6 +115,11 @@ class SaveRepository @Inject constructor(
 
     suspend fun setFavorite(id: Long, fav: Boolean) = saveDao.setFavorite(id, fav)
     suspend fun setPinned(id: Long, pin: Boolean) = saveDao.setPinned(id, pin)
+    suspend fun setArchived(id: Long, archived: Boolean) = saveDao.setArchived(id, archived)
+    suspend fun setRemindAt(id: Long, at: Long?) = saveDao.setRemindAt(id, at)
+    suspend fun dueReminders(): List<SaveItemEntity> = saveDao.dueReminders()
+    /** Reschedule helper: every item that still has a reminder pointed at it. */
+    suspend fun dueOrPendingReminders(): List<SaveItemEntity> = saveDao.pendingReminders()
     suspend fun touchOpened(id: Long) = saveDao.touchOpened(id)
     suspend fun setOcrText(id: Long, text: String) = saveDao.setOcrText(id, text)
 
@@ -163,6 +172,8 @@ class SaveRepository @Inject constructor(
                     .put("metadataJson", s.metadataJson)
                     .put("favorite", s.isFavorite)
                     .put("pinned", s.isPinned)
+                    .put("archived", s.isArchived)
+                    .put("remindAt", s.remindAt)
                     .put("createdAt", s.createdAt)
                     .put("updatedAt", s.updatedAt)
                     .put("openedAt", s.openedAt))
@@ -245,6 +256,8 @@ class SaveRepository @Inject constructor(
                         .put("metadataJson", s.metadataJson)
                         .put("favorite", s.isFavorite)
                         .put("pinned", s.isPinned)
+                        .put("archived", s.isArchived)
+                        .put("remindAt", s.remindAt)
                         .put("createdAt", s.createdAt)
                         .put("updatedAt", s.updatedAt)
                         .put("openedAt", s.openedAt))
@@ -385,6 +398,8 @@ class SaveRepository @Inject constructor(
                 metadataJson = s.optNullableString("metadataJson"),
                 isFavorite = s.optBoolean("favorite", false),
                 isPinned = s.optBoolean("pinned", false),
+                isArchived = s.optBoolean("archived", false),
+                remindAt = s.optNullableLong("remindAt"),
                 createdAt = s.optLong("createdAt", System.currentTimeMillis()),
                 updatedAt = s.optLong("updatedAt", System.currentTimeMillis()),
                 openedAt = s.optNullableLong("openedAt")

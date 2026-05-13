@@ -1,5 +1,6 @@
 package com.ghostgramlabs.pettibox.ui.screens.detail
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,8 +9,10 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.local.TagEntity
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
+import com.ghostgramlabs.pettibox.data.reminders.ReminderWorker
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -30,6 +33,7 @@ data class DetailState(
 class DetailViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val ocrPreferences: OcrPreferences,
+    @ApplicationContext private val appContext: Context,
     handle: SavedStateHandle
 ) : ViewModel() {
 
@@ -66,7 +70,27 @@ class DetailViewModel @Inject constructor(
     }
     fun delete() = viewModelScope.launch {
         val it = state.value.item ?: return@launch
+        ReminderWorker.cancel(appContext, it.id)
         repo.delete(it.id)
+    }
+    fun setArchived(archived: Boolean) = viewModelScope.launch {
+        val it = state.value.item ?: return@launch
+        repo.setArchived(it.id, archived)
+        // Archiving a reminded item cancels its pending notification so
+        // the user doesn't get nudged about something they marked done.
+        if (archived && it.remindAt != null) {
+            repo.setRemindAt(it.id, null)
+            ReminderWorker.cancel(appContext, it.id)
+        }
+    }
+    fun setRemindAt(at: Long?) = viewModelScope.launch {
+        val it = state.value.item ?: return@launch
+        repo.setRemindAt(it.id, at)
+        if (at != null) {
+            ReminderWorker.schedule(appContext, it.id, at)
+        } else {
+            ReminderWorker.cancel(appContext, it.id)
+        }
     }
     fun setCategory(id: String?) = viewModelScope.launch {
         val it = state.value.item ?: return@launch

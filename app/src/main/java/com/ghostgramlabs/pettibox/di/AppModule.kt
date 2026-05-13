@@ -2,6 +2,7 @@ package com.ghostgramlabs.pettibox.di
 
 import android.content.Context
 import androidx.room.Room
+import com.ghostgramlabs.pettibox.data.local.ALL_MIGRATIONS
 import com.ghostgramlabs.pettibox.data.local.AppDatabase
 import com.ghostgramlabs.pettibox.data.local.AttachmentDao
 import com.ghostgramlabs.pettibox.data.local.CategoryDao
@@ -22,6 +23,7 @@ object AppModule {
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase {
         migrateLegacyDatabaseName(ctx)
         return Room.databaseBuilder(ctx, AppDatabase::class.java, "pettibox.db")
+            .addMigrations(*ALL_MIGRATIONS)
             // Defensive: a future downgrade (e.g. an internal tester
             // reverting from a beta build) shouldn't crash on launch.
             // Destructive upgrade is NOT enabled — we still want an

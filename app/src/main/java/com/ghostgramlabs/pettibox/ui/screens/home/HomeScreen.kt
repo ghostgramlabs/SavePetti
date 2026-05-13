@@ -76,6 +76,9 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
+import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SearchPill
@@ -181,6 +184,52 @@ fun HomeScreen(
                     mimeType = "text/plain"
                 )
             }
+        )
+    }
+
+    // Long-press quick-action plumbing. quickActionItem is the item the
+    // sheet is opened for; reminderItem routes the picker. They never
+    // overlap (the sheet dismisses before opening the picker).
+    var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+
+    quickActionItem?.let { item ->
+        QuickActionSheet(
+            item = item,
+            categories = state.categories,
+            onTogglePin = { viewModel.togglePinned(item) },
+            onToggleFavorite = { viewModel.toggleFavorite(item) },
+            onToggleArchive = { viewModel.toggleArchived(item) },
+            onRemind = { reminderItem = item },
+            onMoveTo = { id -> viewModel.moveTo(item, id) },
+            onDelete = { viewModel.delete(item) },
+            onDismiss = { quickActionItem = null }
+        )
+    }
+
+    reminderItem?.let { item ->
+        ReminderPickerSheet(
+            currentRemindAt = item.remindAt,
+            onPick = { at ->
+                reminderItem = null
+                viewModel.setRemindAt(item, at)
+            },
+            onCustom = {
+                reminderItem = null
+                customReminderItem = item
+            },
+            onDismiss = { reminderItem = null }
+        )
+    }
+
+    customReminderItem?.let { item ->
+        ReminderCustomDialog(
+            onConfirm = { at ->
+                viewModel.setRemindAt(item, at)
+                customReminderItem = null
+            },
+            onDismiss = { customReminderItem = null }
         )
     }
 
@@ -296,7 +345,8 @@ fun HomeScreen(
                         PinnedShelf(
                             items = state.pinned,
                             categories = state.categories,
-                            onOpenItem = onOpenItem
+                            onOpenItem = onOpenItem,
+                            onLongPress = { quickActionItem = it }
                         )
                         Spacer(Modifier.height(12.dp))
                     }
@@ -317,7 +367,12 @@ fun HomeScreen(
             }
 
             items(state.recent, key = { "r-${it.id}" }) { item ->
-                CardForItem(item, state.categories, onOpenItem)
+                CardForItem(
+                    item = item,
+                    categories = state.categories,
+                    onOpen = onOpenItem,
+                    onLongPress = { quickActionItem = it }
+                )
             }
         }
     }
@@ -629,7 +684,8 @@ private fun CategoryStrip(
 private fun CardForItem(
     item: SaveItemEntity,
     categories: List<CategoryEntity>,
-    onOpen: (Long) -> Unit
+    onOpen: (Long) -> Unit,
+    onLongPress: (SaveItemEntity) -> Unit = {}
 ) {
     val cat = categories.firstOrNull { it.id == item.categoryId }
     SaveCard(
@@ -637,7 +693,8 @@ private fun CardForItem(
         accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
         categoryEmoji = cat?.emoji,
         categoryName = cat?.name,
-        onClick = { onOpen(item.id) }
+        onClick = { onOpen(item.id) },
+        onLongClick = { onLongPress(item) }
     )
 }
 
@@ -652,7 +709,8 @@ private fun CardForItem(
 private fun PinnedShelf(
     items: List<SaveItemEntity>,
     categories: List<CategoryEntity>,
-    onOpenItem: (Long) -> Unit
+    onOpenItem: (Long) -> Unit,
+    onLongPress: (SaveItemEntity) -> Unit = {}
 ) {
     val tilts = listOf(-3f, 2.5f, -1.5f, 3f, -2.5f, 1.5f)
     val widthsDp = listOf(170, 150, 175, 158, 165, 152)
@@ -680,7 +738,8 @@ private fun PinnedShelf(
                         accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
                         categoryEmoji = cat?.emoji,
                         categoryName = cat?.name,
-                        onClick = { onOpenItem(item.id) }
+                        onClick = { onOpenItem(item.id) },
+                        onLongClick = { onLongPress(item) }
                     )
                 }
             }
