@@ -44,6 +44,10 @@ data class SaveSheetState(
     val localUri: String? = null,
     val attachments: List<String> = emptyList(),
     val isFavorite: Boolean = false,
+    // Reminder picked at save-time. Null means no reminder. The picker
+    // sheet writes this, and save()/saveToCategory() persists it plus
+    // schedules the worker.
+    val remindAt: Long? = null,
     val selectedCategory: String? = null,
     val categories: List<CategoryEntity> = emptyList(),
     val recentItems: List<SaveItemEntity> = emptyList(),
@@ -161,6 +165,8 @@ class SaveSheetViewModel @Inject constructor(
         _state.value = block(_state.value)
     }
 
+    fun setRemindAt(at: Long?) = update { it.copy(remindAt = at) }
+
     fun save() = viewModelScope.launch {
         val s = _state.value
         if (s.title.isBlank() && s.url.isNullOrBlank() && s.localUri.isNullOrBlank()) return@launch
@@ -180,9 +186,17 @@ class SaveSheetViewModel @Inject constructor(
             sourceApp = s.sourceApp.name,
             categoryId = s.selectedCategory,
             notes = s.notes.ifBlank { null },
-            isFavorite = s.isFavorite
+            isFavorite = s.isFavorite,
+            remindAt = s.remindAt
         )
         val id = repo.insert(entity)
+        // Schedule the reminder worker now that we have a real row id —
+        // a remindAt set on the SaveSheet means the user explicitly asked
+        // to be nudged about this save later. Notification permission is
+        // requested at the UI layer before we ever get here.
+        s.remindAt?.let { at ->
+            com.ghostgramlabs.pettibox.data.reminders.ReminderWorker.schedule(appContext, id, at)
+        }
         val tagNames = parseTagInput(s.tagsInput)
         if (tagNames.isNotEmpty()) repo.setTagsForItem(id, tagNames)
 

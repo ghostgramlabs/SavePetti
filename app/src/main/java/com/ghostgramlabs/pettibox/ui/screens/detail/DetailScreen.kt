@@ -93,6 +93,7 @@ import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
+import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -113,6 +114,7 @@ fun DetailScreen(
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     var showReminderSheet by remember { mutableStateOf(false) }
     var showCustomReminder by remember { mutableStateOf(false) }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
     // Per-attachment delete is two-stage: a confirm dialog, then an
     // optimistic hide + Undo snackbar. We commit the actual repo delete
     // only after the snackbar dismisses without Undo, so files survive
@@ -165,12 +167,16 @@ fun DetailScreen(
             currentRemindAt = item?.remindAt,
             onPick = { at ->
                 showReminderSheet = false
-                viewModel.setRemindAt(at)
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        if (at != null) "We'll remind you " + formatReminderAt(at)
-                        else "Reminder cleared"
-                    )
+                if (at != null) {
+                    requestNotificationPermission {
+                        viewModel.setRemindAt(at)
+                        scope.launch {
+                            snackbarHostState.showSnackbar("We'll remind you " + formatReminderAt(at))
+                        }
+                    }
+                } else {
+                    viewModel.setRemindAt(null)
+                    scope.launch { snackbarHostState.showSnackbar("Reminder cleared") }
                 }
             },
             onCustom = {
@@ -185,9 +191,11 @@ fun DetailScreen(
         ReminderCustomDialog(
             onConfirm = { at ->
                 showCustomReminder = false
-                viewModel.setRemindAt(at)
-                scope.launch {
-                    snackbarHostState.showSnackbar("We'll remind you " + formatReminderAt(at))
+                requestNotificationPermission {
+                    viewModel.setRemindAt(at)
+                    scope.launch {
+                        snackbarHostState.showSnackbar("We'll remind you " + formatReminderAt(at))
+                    }
                 }
             },
             onDismiss = { showCustomReminder = false }

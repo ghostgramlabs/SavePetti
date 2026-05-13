@@ -51,11 +51,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ghostgramlabs.pettibox.domain.model.ContentType
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
+import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
+import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SearchField
+import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +73,55 @@ fun SearchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Long-press quick-action plumbing — identical pattern to HomeScreen.
+    var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
+
+    quickActionItem?.let { item ->
+        QuickActionSheet(
+            item = item,
+            categories = state.categories,
+            onTogglePin = { viewModel.togglePinned(item) },
+            onToggleFavorite = { viewModel.toggleFavorite(item) },
+            onToggleArchive = { viewModel.toggleArchived(item) },
+            onRemind = { reminderItem = item },
+            onMoveTo = { id -> viewModel.moveTo(item, id) },
+            onDelete = { viewModel.delete(item) },
+            onDismiss = { quickActionItem = null }
+        )
+    }
+
+    reminderItem?.let { item ->
+        ReminderPickerSheet(
+            currentRemindAt = item.remindAt,
+            onPick = { at ->
+                reminderItem = null
+                if (at != null) {
+                    requestNotificationPermission { viewModel.setRemindAt(item, at) }
+                } else {
+                    viewModel.setRemindAt(item, null)
+                }
+            },
+            onCustom = {
+                reminderItem = null
+                customReminderItem = item
+            },
+            onDismiss = { reminderItem = null }
+        )
+    }
+
+    customReminderItem?.let { item ->
+        ReminderCustomDialog(
+            onConfirm = { at ->
+                customReminderItem = null
+                requestNotificationPermission { viewModel.setRemindAt(item, at) }
+            },
+            onDismiss = { customReminderItem = null }
+        )
+    }
 
     LaunchedEffect(initialQuery, initialSource) {
         if (initialQuery.isNotBlank() && state.query.isBlank()) viewModel.onQuery(initialQuery)
@@ -168,7 +222,8 @@ fun SearchScreen(
                                 accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
                                 categoryEmoji = cat?.emoji,
                                 categoryName = cat?.name,
-                                onClick = { onOpenItem(item.id) }
+                                onClick = { onOpenItem(item.id) },
+                                onLongClick = { quickActionItem = item }
                             )
                         }
                     }

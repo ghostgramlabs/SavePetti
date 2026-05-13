@@ -25,6 +25,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TextSnippet
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FolderOpen
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -275,6 +278,21 @@ fun SettingsScreen(
                     title = "Share and remove safely",
                     body = "Open a saved item to share one attachment from a group, swipe through items, or remove an attachment with Undo.",
                     icon = Icons.Rounded.Share
+                )
+                HelpItem(
+                    title = "Long-press for quick actions",
+                    body = "Press and hold any save to pin, favorite, archive, snooze a reminder, move it to a collection, or delete — without opening it.",
+                    icon = Icons.Rounded.TouchApp
+                )
+                HelpItem(
+                    title = "Remind me later",
+                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom time. A notification opens the save when it fires.",
+                    icon = Icons.Rounded.AccessTime
+                )
+                HelpItem(
+                    title = "Archive when you're done",
+                    body = "Archived saves disappear from Home but stay searchable. Browse a collection and tap the archive icon to flip between active and archived views.",
+                    icon = Icons.Rounded.Archive
                 )
                 HelpItem(
                     title = "Back up your shelf",

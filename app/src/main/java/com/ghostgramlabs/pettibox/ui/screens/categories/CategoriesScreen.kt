@@ -27,8 +27,10 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,11 +57,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
+import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CollectionColorSeeds
 import com.ghostgramlabs.pettibox.ui.components.CollectionEmojiSeeds
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
+import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
+import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import com.ghostgramlabs.pettibox.ui.components.toLongHex
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,6 +110,50 @@ fun CategoriesScreen(
         )
     }
 
+    // Long-press quick-action plumbing for drilled-in items.
+    var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
+
+    quickActionItem?.let { item ->
+        QuickActionSheet(
+            item = item,
+            categories = state.categories,
+            onTogglePin = { viewModel.togglePinned(item) },
+            onToggleFavorite = { viewModel.toggleFavorite(item) },
+            onToggleArchive = { viewModel.toggleArchived(item) },
+            onRemind = { reminderItem = item },
+            onMoveTo = { id -> viewModel.moveTo(item, id) },
+            onDelete = { viewModel.delete(item) },
+            onDismiss = { quickActionItem = null }
+        )
+    }
+    reminderItem?.let { item ->
+        ReminderPickerSheet(
+            currentRemindAt = item.remindAt,
+            onPick = { at ->
+                reminderItem = null
+                if (at != null) requestNotificationPermission { viewModel.setRemindAt(item, at) }
+                else viewModel.setRemindAt(item, null)
+            },
+            onCustom = {
+                reminderItem = null
+                customReminderItem = item
+            },
+            onDismiss = { reminderItem = null }
+        )
+    }
+    customReminderItem?.let { item ->
+        ReminderCustomDialog(
+            onConfirm = { at ->
+                customReminderItem = null
+                requestNotificationPermission { viewModel.setRemindAt(item, at) }
+            },
+            onDismiss = { customReminderItem = null }
+        )
+    }
+
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
@@ -130,15 +181,31 @@ fun CategoriesScreen(
                 val count = state.countsByCategory[state.selectedId] ?: 0
                 ScreenHeading(
                     title = if (selected != null) "${selected.emoji} ${selected.name}" else "Collection",
-                    subtitle = if (count > 0) "$count save${if (count == 1) "" else "s"}" else null,
+                    subtitle = when {
+                        state.showArchived -> "Archived saves"
+                        count > 0 -> "$count save${if (count == 1) "" else "s"}"
+                        else -> null
+                    },
                     leading = {
                         IconButton(onClick = { viewModel.select(null) }) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                         }
                     },
                     trailing = {
-                        if (selected?.userCreated == true) {
-                            Row {
+                        Row {
+                            // Archive-view toggle is always available so a user
+                            // can resurrect things they archived without
+                            // hunting through search.
+                            IconButton(onClick = { viewModel.toggleArchivedView() }) {
+                                Icon(
+                                    if (state.showArchived) Icons.Rounded.Unarchive else Icons.Rounded.Archive,
+                                    contentDescription = if (state.showArchived) "Show active" else "Show archived",
+                                    tint = if (state.showArchived)
+                                        MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (selected?.userCreated == true) {
                                 IconButton(onClick = { showEditCategory = true }) {
                                     Icon(Icons.Rounded.Edit, contentDescription = "Edit collection")
                                 }
@@ -161,8 +228,12 @@ fun CategoriesScreen(
                 if (isEmpty) {
                     EmptyState(
                         emoji = "\uD83D\uDCEC",
-                        headline = "Nothing here yet",
-                        body = "Save something into ${selected?.name ?: "this"} from the share sheet, then it'll show up.",
+                        headline = if (state.showArchived) "No archived saves" else "Nothing here yet",
+                        body = if (state.showArchived) {
+                            "Archived items appear here. Toggle off to see your active saves."
+                        } else {
+                            "Save something into ${selected?.name ?: "this"} from the share sheet, then it'll show up."
+                        },
                         accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary
                     )
                 } else {
@@ -183,7 +254,8 @@ fun CategoriesScreen(
                                 accent = selected?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
                                 categoryEmoji = selected?.emoji,
                                 categoryName = selected?.name,
-                                onClick = { onOpenItem(item.id) }
+                                onClick = { onOpenItem(item.id) },
+                                onLongClick = { quickActionItem = item }
                             )
                         }
                     }

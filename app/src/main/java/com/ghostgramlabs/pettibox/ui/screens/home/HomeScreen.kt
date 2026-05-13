@@ -79,6 +79,7 @@ import com.ghostgramlabs.pettibox.ui.components.EmptyState
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
+import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SearchPill
@@ -193,6 +194,7 @@ fun HomeScreen(
     var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
 
     quickActionItem?.let { item ->
         QuickActionSheet(
@@ -213,7 +215,8 @@ fun HomeScreen(
             currentRemindAt = item.remindAt,
             onPick = { at ->
                 reminderItem = null
-                viewModel.setRemindAt(item, at)
+                if (at != null) requestNotificationPermission { viewModel.setRemindAt(item, at) }
+                else viewModel.setRemindAt(item, null)
             },
             onCustom = {
                 reminderItem = null
@@ -226,8 +229,8 @@ fun HomeScreen(
     customReminderItem?.let { item ->
         ReminderCustomDialog(
             onConfirm = { at ->
-                viewModel.setRemindAt(item, at)
                 customReminderItem = null
+                requestNotificationPermission { viewModel.setRemindAt(item, at) }
             },
             onDismiss = { customReminderItem = null }
         )

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Favorite
@@ -67,6 +68,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
+import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
+import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,8 +86,39 @@ fun SaveSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val scope = rememberCoroutineScope()
     var showCreate by remember { mutableStateOf(false) }
+    var showReminderPicker by remember { mutableStateOf(false) }
+    var showCustomReminder by remember { mutableStateOf(false) }
+    val requestNotificationPermission = rememberNotificationPermissionRequester()
     val titleFocus = remember { FocusRequester() }
     val haptics = LocalHapticFeedback.current
+
+    if (showReminderPicker) {
+        ReminderPickerSheet(
+            currentRemindAt = state.remindAt,
+            onPick = { at ->
+                showReminderPicker = false
+                if (at != null) {
+                    requestNotificationPermission { viewModel.setRemindAt(at) }
+                } else {
+                    viewModel.setRemindAt(null)
+                }
+            },
+            onCustom = {
+                showReminderPicker = false
+                showCustomReminder = true
+            },
+            onDismiss = { showReminderPicker = false }
+        )
+    }
+    if (showCustomReminder) {
+        ReminderCustomDialog(
+            onConfirm = { at ->
+                showCustomReminder = false
+                requestNotificationPermission { viewModel.setRemindAt(at) }
+            },
+            onDismiss = { showCustomReminder = false }
+        )
+    }
 
     LaunchedEffect(Unit) { viewModel.ingest(incoming) }
     // Deliberately not auto-focusing the title - the primary action is
@@ -249,6 +285,15 @@ fun SaveSheet(
                 }
                 item {
                     NewCollectionChip(onClick = { showCreate = true })
+                }
+                item {
+                    // Snooze at save-time. The picker writes to state.remindAt;
+                    // save() schedules the worker for the new row id once
+                    // the insert lands.
+                    RemindMeChip(
+                        remindAt = state.remindAt,
+                        onClick = { showReminderPicker = true }
+                    )
                 }
                 // "Add to existing" as a peer chip in the same row, not a
                 // hidden text link below. Without this, the one-tap chip
@@ -528,6 +573,39 @@ private fun SuccessPanel() {
             "Find it from the home screen anytime.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun RemindMeChip(remindAt: Long?, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val active = remindAt != null
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (active) scheme.primary.copy(alpha = 0.14f) else scheme.surface)
+            .border(
+                1.5.dp,
+                if (active) scheme.primary else scheme.onSurfaceVariant,
+                CircleShape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
+        Icon(
+            Icons.Rounded.AccessTime,
+            contentDescription = null,
+            tint = if (active) scheme.primary else scheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            if (remindAt != null) formatReminderAt(remindAt) else "Remind me",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (active) scheme.primary else scheme.onSurface,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
