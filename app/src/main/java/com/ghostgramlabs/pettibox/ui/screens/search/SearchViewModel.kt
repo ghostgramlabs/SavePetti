@@ -94,12 +94,17 @@ class SearchViewModel @Inject constructor(
     val state: StateFlow<SearchState> = combine(
         _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet
     ) { args ->
-        @Suppress("UNCHECKED_CAST")
+        // See HomeViewModel: combine(vararg) erases types through Array<Any?>
+        // and each cast emits its own warning. Suppress per-line.
         val q = args[0] as String
         val f = args[1] as Filters
+        @Suppress("UNCHECKED_CAST")
         val candidates = args[2] as List<SaveItemEntity>
+        @Suppress("UNCHECKED_CAST")
         val cats = args[3] as List<CategoryEntity>
+        @Suppress("UNCHECKED_CAST")
         val tags = args[4] as List<String>
+        @Suppress("UNCHECKED_CAST")
         val tagIds = args[5] as Set<Long>?
 
         val filtered = candidates.filter { item ->

@@ -1,6 +1,8 @@
 package com.ghostgramlabs.pettibox.data.repository
 
 import androidx.paging.PagingSource
+import androidx.room.withTransaction
+import com.ghostgramlabs.pettibox.data.local.AppDatabase
 import com.ghostgramlabs.pettibox.data.local.AttachmentDao
 import com.ghostgramlabs.pettibox.data.local.AttachmentEntity
 import com.ghostgramlabs.pettibox.data.local.CategoryCount
@@ -27,6 +29,7 @@ import javax.inject.Singleton
 
 @Singleton
 class SaveRepository @Inject constructor(
+    private val database: AppDatabase,
     private val saveDao: SaveDao,
     private val categoryDao: CategoryDao,
     private val attachmentDao: AttachmentDao,
@@ -302,11 +305,17 @@ class SaveRepository @Inject constructor(
                     zip.closeEntry()
                     continue
                 }
+                // Guard against zip-slip: a malicious or corrupted backup
+                // with entries like "files/../../../etc/passwd" would
+                // otherwise escape the attachments sandbox via the
+                // originalName/extension. We only accept entries strictly
+                // inside files/ with no parent-traversal segments.
+                val safeName = !entry.name.contains("..") && !entry.name.startsWith("/")
                 when {
-                    entry.name == "backup.json" -> {
+                    safeName && entry.name == "backup.json" -> {
                         backupJson = zip.readBytes().toString(Charsets.UTF_8)
                     }
-                    entry.name.startsWith("files/") -> {
+                    safeName && entry.name.startsWith("files/") -> {
                         attachmentStore.ingestBackupFile(
                             input = NonClosingInputStream(zip),
                             originalName = entry.name.substringAfterLast('/')
@@ -328,7 +337,11 @@ class SaveRepository @Inject constructor(
     private suspend fun importBackupJson(
         json: String,
         fileUrisByPath: Map<String, String>
-    ): BackupImportResult {
+    ): BackupImportResult = database.withTransaction {
+        // Wrapping the whole import in a transaction means a mid-flight
+        // failure (process death, OOM, malformed entry) rolls everything
+        // back — the user retries from the same backup file and doesn't
+        // end up with half their library duplicated.
         val root = JSONObject(json)
         val categories = root.optJSONArray("categories") ?: JSONArray()
         val saves = root.optJSONArray("saves") ?: JSONArray()
@@ -425,7 +438,7 @@ class SaveRepository @Inject constructor(
             tagDao.link(ItemTagCrossRef(newItemId, newTagId))
         }
 
-        return BackupImportResult(
+        BackupImportResult(
             categories = categoryCount,
             saves = saveCount,
             attachments = attachmentCount,

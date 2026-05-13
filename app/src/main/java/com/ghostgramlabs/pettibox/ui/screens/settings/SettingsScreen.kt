@@ -86,7 +86,8 @@ fun SettingsScreen(
             enabled = false,
             lastBackupAt = 0L,
             lastBackupName = "",
-            folderUri = ""
+            folderUri = "",
+            lastCopyFailedAt = 0L
         )
     )
     val importBackup = rememberLauncherForActivityResult(
@@ -277,7 +278,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup can also copy the ZIP to a folder you choose.",
+                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup keeps the 3 most recent ZIPs on this device, and can also copy each one to a folder you choose.",
                     icon = Icons.Rounded.Download
                 )
             }
@@ -333,9 +334,9 @@ fun SettingsScreen(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     if (localBackupStatus.folderUri.isBlank()) {
-                        "By default, automatic backups stay in PettiBox app storage. Pick a folder to keep a copy somewhere easier to find."
+                        "By default, the 3 most recent automatic backups stay in PettiBox app storage. Pick a folder to keep a copy somewhere easier to find."
                     } else {
-                        "Automatic backups are copied to your selected folder. PettiBox also keeps a private safety copy on this device."
+                        "Automatic backups are copied to your selected folder. PettiBox also keeps the 3 most recent backups as a private safety copy on this device."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

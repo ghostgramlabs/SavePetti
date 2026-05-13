@@ -18,11 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -483,7 +483,7 @@ private fun Paperclip(modifier: Modifier = Modifier) {
                 val path = Path().apply {
                     moveTo(w * 0.2f, 0f)
                     lineTo(w * 0.2f, h * 0.7f)
-                    quadraticBezierTo(w * 0.5f, h, w * 0.8f, h * 0.7f)
+                    quadraticTo(w * 0.5f, h, w * 0.8f, h * 0.7f)
                     lineTo(w * 0.8f, h * 0.2f)
                 }
                 drawPath(
@@ -518,8 +518,8 @@ private fun iconFor(type: ContentType) = when (type) {
     ContentType.LINK -> Icons.Rounded.Link
     ContentType.IMAGE -> Icons.Rounded.Image
     ContentType.PDF -> Icons.Rounded.PictureAsPdf
-    ContentType.NOTE, ContentType.TEXT -> Icons.Rounded.Notes
-    ContentType.FILE -> Icons.Rounded.Notes
+    ContentType.NOTE, ContentType.TEXT -> Icons.AutoMirrored.Rounded.Notes
+    ContentType.FILE -> Icons.AutoMirrored.Rounded.Notes
 }
 
 private fun headerRatio(type: ContentType): Float = when (type) {

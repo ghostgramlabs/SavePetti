@@ -18,7 +18,8 @@ data class LocalBackupStatus(
     val enabled: Boolean,
     val lastBackupAt: Long,
     val lastBackupName: String,
-    val folderUri: String
+    val folderUri: String,
+    val lastCopyFailedAt: Long
 )
 
 @Singleton
@@ -29,13 +30,19 @@ class BackupPreferences @Inject constructor(
     private val lastBackupAtKey = longPreferencesKey("last_local_backup_at")
     private val lastBackupNameKey = stringPreferencesKey("last_local_backup_name")
     private val backupFolderUriKey = stringPreferencesKey("local_backup_folder_uri")
+    // Set when the worker successfully wrote a local zip but copying it to
+    // the user's picked SAF folder failed (often: tree permission revoked
+    // by the system after a while). Settings reads this to show a small
+    // "couldn't copy to picked folder" hint.
+    private val lastCopyFailedAtKey = longPreferencesKey("last_local_backup_copy_failed_at")
 
     val status: Flow<LocalBackupStatus> = context.backupDataStore.data.map { prefs ->
         LocalBackupStatus(
             enabled = prefs[autoLocalBackupKey] ?: false,
             lastBackupAt = prefs[lastBackupAtKey] ?: 0L,
             lastBackupName = prefs[lastBackupNameKey].orEmpty(),
-            folderUri = prefs[backupFolderUriKey].orEmpty()
+            folderUri = prefs[backupFolderUriKey].orEmpty(),
+            lastCopyFailedAt = prefs[lastCopyFailedAtKey] ?: 0L
         )
     }
 
@@ -49,6 +56,16 @@ class BackupPreferences @Inject constructor(
         context.backupDataStore.edit { prefs ->
             prefs[lastBackupAtKey] = timestamp
             prefs[lastBackupNameKey] = fileName
+            // A fresh successful local backup clears any prior copy-failure
+            // marker — the user picking a new folder or granting permission
+            // self-heals the warning.
+            prefs.remove(lastCopyFailedAtKey)
+        }
+    }
+
+    suspend fun recordCopyFailure(timestamp: Long = System.currentTimeMillis()) {
+        context.backupDataStore.edit { prefs ->
+            prefs[lastCopyFailedAtKey] = timestamp
         }
     }
 

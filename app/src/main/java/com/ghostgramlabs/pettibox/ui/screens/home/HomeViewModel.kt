@@ -64,11 +64,19 @@ class HomeViewModel @Inject constructor(
         isTextIndexing,
         onboardingPreferences.showHomeOnboarding
     ) { args ->
+        // combine(vararg) returns Array<Any?> at runtime — the per-cast
+        // unchecked-cast warnings are unavoidable and noisy; we accept the
+        // type contract because the call site is the only one constructing
+        // and consuming the array.
         @Suppress("UNCHECKED_CAST")
         val recent = args[0] as List<SaveItemEntity>
+        @Suppress("UNCHECKED_CAST")
         val pinned = args[1] as List<SaveItemEntity>
+        @Suppress("UNCHECKED_CAST")
         val favs = args[2] as List<SaveItemEntity>
+        @Suppress("UNCHECKED_CAST")
         val cats = args[3] as List<CategoryEntity>
+        @Suppress("UNCHECKED_CAST")
         val rawCounts = args[4] as List<com.ghostgramlabs.pettibox.data.local.SourceCount>
         val total = args[5] as Int
         val indexing = args[6] as Boolean

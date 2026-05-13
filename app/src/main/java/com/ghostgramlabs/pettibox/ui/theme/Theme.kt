@@ -10,7 +10,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
@@ -78,9 +77,15 @@ fun PettiBoxTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
+            // MainActivity already calls enableEdgeToEdge() so the system
+            // bars are transparent — content (paper texture + Compose UI)
+            // is responsible for what sits behind them. We only own the
+            // icon tint here: dark icons on light background, light icons
+            // on dark background. The deprecated statusBarColor /
+            // navigationBarColor setters do nothing on Android 15 (API
+            // 35) and we used to paint them anyway, which left some
+            // Pixel devices showing a stale white bar.
             val window = (view.context as Activity).window
-            window.statusBarColor = colors.background.toArgb()
-            window.navigationBarColor = colors.background.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme

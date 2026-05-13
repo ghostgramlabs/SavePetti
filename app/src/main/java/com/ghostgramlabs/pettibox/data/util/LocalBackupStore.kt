@@ -22,7 +22,10 @@ class LocalBackupStore @Inject constructor(
         return File(dir, "pettibox-auto-backup-$stamp.zip")
     }
 
-    fun pruneOldBackups(keep: Int = 7) {
+    // 3 rolling copies is enough recovery headroom for a daily worker;
+    // 7 (the prior default) could pile up gigabytes on heavy libraries
+    // because each zip embeds every attachment.
+    fun pruneOldBackups(keep: Int = 3) {
         backupDir()
             .listFiles { file -> file.isFile && file.name.startsWith("pettibox-auto-backup-") && file.extension == "zip" }
             .orEmpty()

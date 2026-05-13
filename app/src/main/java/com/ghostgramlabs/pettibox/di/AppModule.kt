@@ -22,9 +22,11 @@ object AppModule {
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase {
         migrateLegacyDatabaseName(ctx)
         return Room.databaseBuilder(ctx, AppDatabase::class.java, "pettibox.db")
-            // Foreign-key cascades (CategoryEntity self-FK, attachments, item_tags)
-            // require pragma to be on. Room enables it by default since 2.6,
-            // but we make the dependency explicit.
+            // Defensive: a future downgrade (e.g. an internal tester
+            // reverting from a beta build) shouldn't crash on launch.
+            // Destructive upgrade is NOT enabled — we still want an
+            // exception if someone bumps the schema without a Migration.
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
     }
 
@@ -34,13 +36,36 @@ object AppModule {
         if (!oldDb.exists() || newDb.exists()) return
 
         newDb.parentFile?.mkdirs()
-        oldDb.renameTo(newDb)
+        // renameTo can fail (cross-filesystem mount, file lock) and returns
+        // false rather than throwing. If we ignore the failure, Room opens
+        // a fresh empty pettibox.db and the user appears to have lost
+        // everything. Fall back to byte-copy + delete on failure.
+        if (!safelyMoveDbFile(oldDb, newDb)) return
+
         listOf("-wal", "-shm", "-journal").forEach { suffix ->
             val oldSidecar = ctx.getDatabasePath("savepetti.db$suffix")
             if (oldSidecar.exists()) {
-                oldSidecar.renameTo(ctx.getDatabasePath("pettibox.db$suffix"))
+                safelyMoveDbFile(oldSidecar, ctx.getDatabasePath("pettibox.db$suffix"))
             }
         }
+    }
+
+    private fun safelyMoveDbFile(source: java.io.File, target: java.io.File): Boolean {
+        if (source.renameTo(target)) return true
+        // renameTo failed — try copy, then verify before deleting source so
+        // a partial copy on a failing disk doesn't lose user data.
+        return runCatching {
+            source.inputStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+            if (target.length() == source.length()) {
+                source.delete()
+                true
+            } else {
+                target.delete()
+                false
+            }
+        }.getOrDefault(false)
     }
 
     @Provides fun provideSaveDao(db: AppDatabase): SaveDao = db.saveDao()

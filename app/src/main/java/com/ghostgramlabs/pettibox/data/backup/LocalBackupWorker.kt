@@ -32,7 +32,16 @@ class LocalBackupWorker @AssistedInject constructor(
             val file = backupStore.createBackupFile()
             repository.exportBackupZip(file)
             val status = backupPreferences.status.first()
-            backupStore.copyToPickedFolder(file, status.folderUri)
+            // If the user picked a SAF folder, copy the local zip there.
+            // Failure is recorded so Settings can surface a hint — typical
+            // cause is the system silently revoking the persistable tree
+            // permission. Without this signal the worker would keep
+            // succeeding and the user would silently lose their cloud
+            // backup target.
+            if (status.folderUri.isNotBlank()) {
+                val copied = backupStore.copyToPickedFolder(file, status.folderUri)
+                if (!copied) backupPreferences.recordCopyFailure()
+            }
             backupStore.pruneOldBackups()
             backupPreferences.recordLocalBackup(file.name, file.lastModified())
             Result.success()
