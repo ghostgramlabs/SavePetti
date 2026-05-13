@@ -14,6 +14,7 @@ import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -30,6 +31,8 @@ class LocalBackupWorker @AssistedInject constructor(
         runCatching {
             val file = backupStore.createBackupFile()
             repository.exportBackupZip(file)
+            val status = backupPreferences.status.first()
+            backupStore.copyToPickedFolder(file, status.folderUri)
             backupStore.pruneOldBackups()
             backupPreferences.recordLocalBackup(file.name, file.lastModified())
             Result.success()

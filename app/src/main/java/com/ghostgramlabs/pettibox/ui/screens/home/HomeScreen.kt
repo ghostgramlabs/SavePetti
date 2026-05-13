@@ -191,12 +191,14 @@ fun HomeScreen(
         // double-padded gap above the bottom nav and below the status bar.
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showChooser = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(14.dp)
-            ) { Icon(Icons.Rounded.Add, contentDescription = "Add to shelf") }
+            if (!state.isLoading && state.totalCount > 0) {
+                FloatingActionButton(
+                    onClick = { showChooser = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(14.dp)
+                ) { Icon(Icons.Rounded.Add, contentDescription = "Add to shelf") }
+            }
         }
     ) { padding ->
         if (state.isLoading) {

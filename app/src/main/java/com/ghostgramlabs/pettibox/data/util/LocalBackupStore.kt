@@ -1,7 +1,9 @@
 package com.ghostgramlabs.pettibox.data.util
 
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
+import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.text.SimpleDateFormat
@@ -32,6 +34,27 @@ class LocalBackupStore @Inject constructor(
     fun backupLocationLabel(): String = "Device storage / PettiBox backups"
 
     fun backupPath(): String = backupDir().absolutePath
+
+    fun copyToPickedFolder(source: File, folderUri: String): Boolean {
+        if (folderUri.isBlank()) return false
+        return runCatching {
+            val treeUri = Uri.parse(folderUri)
+            val parentUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getTreeDocumentId(treeUri)
+            )
+            val targetUri = DocumentsContract.createDocument(
+                context.contentResolver,
+                parentUri,
+                "application/zip",
+                source.name
+            ) ?: return false
+            context.contentResolver.openOutputStream(targetUri)?.use { output ->
+                source.inputStream().use { input -> input.copyTo(output) }
+            } ?: return false
+            true
+        }.getOrDefault(false)
+    }
 
     private fun backupDir(): File {
         val external = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)

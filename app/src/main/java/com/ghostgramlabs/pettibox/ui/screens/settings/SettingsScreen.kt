@@ -85,7 +85,8 @@ fun SettingsScreen(
         initialValue = LocalBackupStatus(
             enabled = false,
             lastBackupAt = 0L,
-            lastBackupName = ""
+            lastBackupName = "",
+            folderUri = ""
         )
     )
     val importBackup = rememberLauncherForActivityResult(
@@ -102,6 +103,17 @@ fun SettingsScreen(
                     .onFailure {
                         snackbarHostState.showSnackbar("That backup file couldn't be imported")
                     }
+            }
+        }
+    }
+    val chooseBackupFolder = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                runCatching { viewModel.setLocalBackupFolder(uri) }
+                    .onSuccess { snackbarHostState.showSnackbar("Backup folder selected") }
+                    .onFailure { snackbarHostState.showSnackbar("Couldn't use that folder") }
             }
         }
     }
@@ -265,7 +277,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup saves the same ZIP on this device and keeps the latest 7 copies.",
+                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup can also copy the ZIP to a folder you choose.",
                     icon = Icons.Rounded.Download
                 )
             }
@@ -320,13 +332,17 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Backups stay in ${viewModel.localBackupLocationLabel()}. PettiBox keeps the latest 7 automatic backups.",
+                    if (localBackupStatus.folderUri.isBlank()) {
+                        "By default, automatic backups stay in PettiBox app storage. Pick a folder to keep a copy somewhere easier to find."
+                    } else {
+                        "Automatic backups are copied to your selected folder. PettiBox also keeps a private safety copy on this device."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Backup folder",
+                    "Default backup path",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -341,6 +357,20 @@ fun SettingsScreen(
                             .padding(10.dp),
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { chooseBackupFolder.launch(null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (localBackupStatus.folderUri.isBlank()) "Choose backup folder"
+                        else "Change backup folder",
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(Modifier.height(12.dp))

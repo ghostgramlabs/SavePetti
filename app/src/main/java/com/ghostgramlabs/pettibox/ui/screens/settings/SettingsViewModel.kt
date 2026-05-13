@@ -1,6 +1,7 @@
 package com.ghostgramlabs.pettibox.ui.screens.settings
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
@@ -14,6 +15,7 @@ import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.io.File
 import javax.inject.Inject
 
@@ -43,9 +45,19 @@ class SettingsViewModel @Inject constructor(
     suspend fun createLocalBackupNow(): Pair<File, SaveRepository.BackupExportResult> {
         val file = localBackupStore.createBackupFile()
         val result = repo.exportBackupZip(file)
+        val status = backupPreferences.status.first()
+        localBackupStore.copyToPickedFolder(file, status.folderUri)
         localBackupStore.pruneOldBackups()
         backupPreferences.recordLocalBackup(file.name, file.lastModified())
         return file to result
+    }
+
+    suspend fun setLocalBackupFolder(uri: Uri) {
+        appContext.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        )
+        backupPreferences.setBackupFolder(uri.toString())
     }
 
     suspend fun setAutoLocalBackup(enabled: Boolean) {

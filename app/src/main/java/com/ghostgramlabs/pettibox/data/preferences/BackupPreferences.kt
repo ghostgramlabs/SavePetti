@@ -17,7 +17,8 @@ private val Context.backupDataStore by preferencesDataStore(name = "backup_prefe
 data class LocalBackupStatus(
     val enabled: Boolean,
     val lastBackupAt: Long,
-    val lastBackupName: String
+    val lastBackupName: String,
+    val folderUri: String
 )
 
 @Singleton
@@ -27,12 +28,14 @@ class BackupPreferences @Inject constructor(
     private val autoLocalBackupKey = booleanPreferencesKey("auto_local_backup")
     private val lastBackupAtKey = longPreferencesKey("last_local_backup_at")
     private val lastBackupNameKey = stringPreferencesKey("last_local_backup_name")
+    private val backupFolderUriKey = stringPreferencesKey("local_backup_folder_uri")
 
     val status: Flow<LocalBackupStatus> = context.backupDataStore.data.map { prefs ->
         LocalBackupStatus(
             enabled = prefs[autoLocalBackupKey] ?: false,
             lastBackupAt = prefs[lastBackupAtKey] ?: 0L,
-            lastBackupName = prefs[lastBackupNameKey].orEmpty()
+            lastBackupName = prefs[lastBackupNameKey].orEmpty(),
+            folderUri = prefs[backupFolderUriKey].orEmpty()
         )
     }
 
@@ -46,6 +49,12 @@ class BackupPreferences @Inject constructor(
         context.backupDataStore.edit { prefs ->
             prefs[lastBackupAtKey] = timestamp
             prefs[lastBackupNameKey] = fileName
+        }
+    }
+
+    suspend fun setBackupFolder(uri: String) {
+        context.backupDataStore.edit { prefs ->
+            prefs[backupFolderUriKey] = uri
         }
     }
 }
