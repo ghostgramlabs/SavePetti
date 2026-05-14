@@ -133,6 +133,10 @@ interface SaveDao {
     @Query("SELECT COUNT(*) FROM save_items WHERE is_archived = 0")
     fun observeTotal(): Flow<Int>
 
+    /** Count of archived items only — used to differentiate "fresh install" (0) from "you archived everything" (>0). */
+    @Query("SELECT COUNT(*) FROM save_items WHERE is_archived = 1")
+    fun observeArchivedTotal(): Flow<Int>
+
     // ── Reminders ─────────────────────────────────────────────────────────
 
     @Query("SELECT * FROM save_items WHERE remind_at IS NOT NULL AND remind_at <= :now AND is_archived = 0 ORDER BY remind_at ASC")

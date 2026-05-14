@@ -49,6 +49,12 @@ data class SaveSheetState(
     // schedules the worker.
     val remindAt: Long? = null,
     val selectedCategory: String? = null,
+    // Category id we'd suggest based on URL/title heuristics — null
+    // when we have no good guess. The chip with this id renders with
+    // a primary-colored border so the user notices, but is NOT
+    // pre-selected (auto-saving to the wrong place is worse than no
+    // suggestion at all).
+    val suggestedCategory: String? = null,
     val categories: List<CategoryEntity> = emptyList(),
     val recentItems: List<SaveItemEntity> = emptyList(),
     val isResolving: Boolean = false,
@@ -106,19 +112,62 @@ class SaveSheetViewModel @Inject constructor(
             attachments = allImages,
             sourceApp = source,
             contentType = type,
-            isResolving = firstUrl != null
+            isResolving = firstUrl != null,
+            suggestedCategory = suggestCategoryId(firstUrl, source, initialTitle)
         )
 
         if (firstUrl != null) {
             viewModelScope.launch {
                 val meta = metadata.fetch(firstUrl)
+                val richerTitle = meta?.title ?: _state.value.title
                 _state.value = _state.value.copy(
-                    title = meta?.title ?: _state.value.title,
+                    title = richerTitle,
                     previewImage = meta?.imageUrl,
                     description = meta?.description,
-                    isResolving = false
+                    isResolving = false,
+                    // Re-run the heuristic with the metadata-resolved title
+                    // (often more descriptive than the raw share text) so a
+                    // YouTube URL whose share text was just the link still
+                    // suggests "Music" once we know the page title.
+                    suggestedCategory = _state.value.suggestedCategory
+                        ?: suggestCategoryId(firstUrl, source, richerTitle)
                 )
             }
+        }
+    }
+
+    /**
+     * Best-effort category suggestion based on the URL host, source app,
+     * and title text. Only returns one of the seeded default category
+     * ids — user-created collections aren't auto-suggested because they
+     * have no semantic mapping. Returns null when the signal is too weak,
+     * so the user gets a neutral chip row instead of a wrong nudge.
+     */
+    private fun suggestCategoryId(url: String?, source: SourceApp, title: String?): String? {
+        val haystack = listOfNotNull(url, title).joinToString(" ").lowercase()
+        if (haystack.isBlank()) return null
+        return when {
+            // Music / video — these dominate share traffic for many users
+            Regex("youtube\\.com|youtu\\.be|soundcloud|spotify\\.com|music\\.apple|bandcamp")
+                .containsMatchIn(haystack) -> "music"
+            // Recipes — strong signal from URL or "recipe"/"ingredients" in title
+            Regex("allrecipes|foodnetwork|food52|epicurious|seriouseats|smittenkitchen|nytimes\\.com/recipes|cooking\\.nytimes|bonappetit\\.com")
+                .containsMatchIn(haystack) ||
+                "recipe" in haystack ||
+                "ingredients" in haystack -> "recipes"
+            // Travel
+            Regex("airbnb|booking\\.com|kayak|expedia|tripadvisor|hotels\\.com|skyscanner|lonelyplanet")
+                .containsMatchIn(haystack) -> "travel"
+            // Long-form reads — major article platforms + news
+            Regex("medium\\.com|substack\\.com|longreads|nytimes\\.com|theguardian\\.com|wired\\.com|theatlantic|newyorker\\.com|technologyreview")
+                .containsMatchIn(haystack) -> "read_later"
+            // Fitness
+            Regex("strava\\.com|peloton|fitbod|myfitnesspal").containsMatchIn(haystack) ||
+                "workout" in haystack || "fitness " in haystack -> "fitness"
+            // Finance
+            Regex("bloomberg|investing\\.com|marketwatch|finance\\.yahoo|wsj\\.com")
+                .containsMatchIn(haystack) -> "finance"
+            else -> null
         }
     }
 

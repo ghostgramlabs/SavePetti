@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -274,6 +276,12 @@ fun SaveSheet(
                         color = Color(c.colorHex),
                         selected = state.selectedCategory == c.id,
                         tilt = tilt,
+                        // Hint border on the URL/title-suggested chip so
+                        // the user notices it without us auto-saving for
+                        // them — auto-save to the wrong place would be
+                        // worse than no suggestion.
+                        suggested = state.selectedCategory == null &&
+                            state.suggestedCategory == c.id,
                         // Stash flow: tapping a collection IS the save.
                         // The bottom-bar Save button is a fallback for
                         // saves the user wants to keep uncategorized.
@@ -323,45 +331,60 @@ fun SaveSheet(
             // sticky action bar even before the user scrolls.
             Spacer(Modifier.height(16.dp))
         }
-        // Sticky action bar - always visible regardless of keyboard / content.
+        // Sticky action bar — always visible regardless of keyboard /
+        // content. Hairline top border separates it from the scrolling
+        // chooser content above so it reads as a footer, not as more of
+        // the same column.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
+                .drawBehind {
+                    val stroke = 1.dp.toPx()
+                    drawLine(
+                        color = androidx.compose.ui.graphics.Color(0x14000000),
+                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                        strokeWidth = stroke
+                    )
+                }
                 .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 20.dp, vertical = 12.dp)
                 .navigationBarsPadding()
         ) {
+            // Heart icon stands on its own — the previous "Mark favorite" /
+            // "Loved it" text label was visual noise next to a universally
+            // understood symbol. The contentDescription preserves the
+            // explanation for screen readers.
             IconButton(onClick = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 viewModel.toggleFavorite()
             }) {
                 Icon(
                     if (state.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (state.isFavorite) "Unfavorite" else "Favorite",
+                    contentDescription = if (state.isFavorite) "Remove from favorites" else "Add to favorites",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp)
                 )
             }
-            Text(
-                if (state.isFavorite) "Loved it" else "Mark favorite",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Spacer(Modifier.weight(1f))
             // No-collection fallback. Picking a collection above already
-            // saves; this button exists for the rare "just stash it
-            // somewhere unsorted" case.
-            Button(
+            // saves; this OutlinedButton matches the "Append to a save"
+            // and "Choose backup folder" style — same secondary visual
+            // weight, distinct from the chunky filled chips above.
+            OutlinedButton(
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.save()
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = RoundedCornerShape(12.dp)
+                border = androidx.compose.foundation.BorderStroke(
+                    1.5.dp,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                )
             ) {
                 Text(
                     if (state.selectedCategory == null) "Save without collection" else "Save",

@@ -38,6 +38,10 @@ data class HomeState(
     val categories: List<CategoryEntity> = emptyList(),
     val sources: List<SourceCount> = emptyList(),
     val totalCount: Int = 0,
+    // Archived-only count. Lets the empty-state branch between
+    // "fresh install" (totalCount = 0 AND archivedCount = 0) and
+    // "you've archived everything" (totalCount = 0 AND archivedCount > 0).
+    val archivedCount: Int = 0,
     val isIndexingText: Boolean = false,
     val showOnboarding: Boolean = false
 )
@@ -62,6 +66,7 @@ class HomeViewModel @Inject constructor(
         repo.observeCategories(),
         repo.observeSourceCounts(),
         repo.observeTotal(),
+        repo.observeArchivedTotal(),
         isTextIndexing,
         onboardingPreferences.showHomeOnboarding
     ) { args ->
@@ -80,8 +85,9 @@ class HomeViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val rawCounts = args[4] as List<com.ghostgramlabs.pettibox.data.local.SourceCount>
         val total = args[5] as Int
-        val indexing = args[6] as Boolean
-        val showOnboarding = args[7] as Boolean
+        val archived = args[6] as Int
+        val indexing = args[7] as Boolean
+        val showOnboarding = args[8] as Boolean
 
         val sources = rawCounts.mapNotNull { sc ->
             val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
@@ -96,6 +102,7 @@ class HomeViewModel @Inject constructor(
             categories = cats,
             sources = sources,
             totalCount = total,
+            archivedCount = archived,
             isIndexingText = indexing,
             showOnboarding = showOnboarding
         )

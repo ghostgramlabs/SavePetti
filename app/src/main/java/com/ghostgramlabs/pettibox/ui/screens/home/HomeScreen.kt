@@ -269,20 +269,35 @@ fun HomeScreen(
         if (state.recent.isEmpty() && state.pinned.isEmpty() && state.favorites.isEmpty()) {
             Column(Modifier.padding(padding).fillMaxSize()) {
                 Greeting()
-                FirstRunGuide(
-                    onAddNote = openQuickNote,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(Modifier.height(10.dp))
-                // FirstRunGuide already exposes the primary "Add something
-                // now" call-to-action; this empty state is purely an
-                // explainer below it. Repeating the button was confusing.
-                EmptyState(
-                    emoji = "\uD83D\uDCE5",
-                    headline = "PettiBox lives in your Share menu",
-                    body = "In YouTube, Instagram, Chrome, Photos, or Files, tap Share and choose PettiBox. Pick a collection and it becomes searchable.",
-                    fillScreen = false
-                )
+                if (state.archivedCount > 0) {
+                    // The shelf isn't empty, the user has archived all of
+                    // it. Pointing them at the Share menu would imply
+                    // they've never saved anything, which is wrong. The
+                    // path back to their saves is the Browse archive view.
+                    EmptyState(
+                        emoji = "\uD83D\uDDC3",
+                        headline = "Nothing live on your shelf",
+                        body = "You've archived everything. Open Browse \u2192 tap the archive icon on any collection to see what's tucked away.",
+                        fillScreen = false
+                    )
+                } else {
+                    // True fresh install \u2014 show the 3-step guide + the
+                    // share-into-PettiBox explainer below.
+                    FirstRunGuide(
+                        onAddNote = openQuickNote,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    // FirstRunGuide already exposes the primary "Add
+                    // something now" call-to-action; this empty state is
+                    // purely an explainer below it.
+                    EmptyState(
+                        emoji = "\uD83D\uDCE5",
+                        headline = "PettiBox lives in your Share menu",
+                        body = "In YouTube, Instagram, Chrome, Photos, or Files, tap Share and choose PettiBox. Pick a collection and it becomes searchable.",
+                        fillScreen = false
+                    )
+                }
             }
             return@Scaffold
         }
@@ -314,14 +329,12 @@ fun HomeScreen(
                     }
                     Spacer(Modifier.height(20.dp))
                     if (state.categories.isNotEmpty()) {
+                        // No "See all" trailing — Browse is one tap away in
+                        // the bottom nav already; the link was duplicate
+                        // navigation cluttering the header.
                         SectionHeader(
                             "Browse",
-                            subtitle = "Tap a vibe to explore",
-                            trailing = {
-                                androidx.compose.material3.TextButton(onClick = onOpenAllCategories) {
-                                    androidx.compose.material3.Text("See all")
-                                }
-                            }
+                            subtitle = "Tap a vibe to explore"
                         )
                         Spacer(Modifier.height(10.dp))
                         CategoryStrip(
@@ -348,6 +361,21 @@ fun HomeScreen(
                         // like books on a shelf rather than items in a grid.
                         PinnedShelf(
                             items = state.pinned,
+                            categories = state.categories,
+                            onOpenItem = onOpenItem,
+                            onLongPress = { quickActionItem = it }
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    // Favorites get a quieter horizontal row — distinct from
+                    // the leaning Pinned shelf so the two read as different
+                    // intents (Pinned = sticky for now, Favorites = saves
+                    // you've signaled you love long-term). Hidden when empty.
+                    if (state.favorites.isNotEmpty()) {
+                        SectionHeader("Loved", subtitle = "Things you marked with a heart")
+                        Spacer(Modifier.height(8.dp))
+                        FavoritesRow(
+                            items = state.favorites,
                             categories = state.categories,
                             onOpenItem = onOpenItem,
                             onLongPress = { quickActionItem = it }
@@ -754,6 +782,40 @@ private fun PinnedShelf(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 4.dp)
         )
+    }
+}
+
+/**
+ * Favorited saves rendered as a horizontally-scrolling row of compact
+ * cards. Visually orderly (no leaning, no shelf line) so it doesn't
+ * read as a second pinned shelf — favorites are a curated long-term
+ * collection, not a workspace.
+ */
+@Composable
+private fun FavoritesRow(
+    items: List<SaveItemEntity>,
+    categories: List<CategoryEntity>,
+    onOpenItem: (Long) -> Unit,
+    onLongPress: (SaveItemEntity) -> Unit = {}
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(items, key = { "fav-${it.id}" }) { item ->
+            val cat = categories.firstOrNull { it.id == item.categoryId }
+            Box(Modifier.width(160.dp)) {
+                SaveCard(
+                    item = item,
+                    accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
+                    categoryEmoji = cat?.emoji,
+                    categoryName = cat?.name,
+                    onClick = { onOpenItem(item.id) },
+                    onLongClick = { onLongPress(item) }
+                )
+            }
+        }
     }
 }
 

@@ -112,6 +112,7 @@ class SaveRepository @Inject constructor(
     fun observeSourceCounts(): Flow<List<SourceCount>> = saveDao.observeSourceCounts()
     fun observeCategoryCounts(): Flow<List<CategoryCount>> = saveDao.observeCategoryCounts()
     fun observeTotal(): Flow<Int> = saveDao.observeTotal()
+    fun observeArchivedTotal(): Flow<Int> = saveDao.observeArchivedTotal()
 
     suspend fun setFavorite(id: Long, fav: Boolean) = saveDao.setFavorite(id, fav)
     suspend fun setPinned(id: Long, pin: Boolean) = saveDao.setPinned(id, pin)

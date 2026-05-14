@@ -24,6 +24,10 @@ import androidx.compose.ui.unit.dp
  * A category chip with a slight tilt so a row of chips looks
  * hand-placed, not aligned-by-grid. Selected chips fill with the category
  * color; unselected use a soft tint of it on the cream background.
+ *
+ * When [suggested] is true (and not selected), the chip gets a thicker
+ * primary-colored border so it visually nudges the user without being
+ * pre-selected — used by the Save sheet's URL/title heuristic.
  */
 @Composable
 fun CategoryChip(
@@ -33,10 +37,21 @@ fun CategoryChip(
     selected: Boolean,
     modifier: Modifier = Modifier,
     tilt: Float = 0f,
+    suggested: Boolean = false,
     onClick: () -> Unit
 ) {
     val bg = if (selected) color else color.copy(alpha = 0.14f)
     val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val borderWidth = when {
+        selected -> 0.dp
+        suggested -> 2.dp
+        else -> 1.dp
+    }
+    val borderColor = when {
+        selected -> Color.Transparent
+        suggested -> MaterialTheme.colorScheme.primary
+        else -> color.copy(alpha = 0.35f)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -44,8 +59,8 @@ fun CategoryChip(
             .rotate(tilt)
             .background(bg, RoundedCornerShape(12.dp))
             .border(
-                width = if (selected) 0.dp else 1.dp,
-                color = color.copy(alpha = 0.35f),
+                width = borderWidth,
+                color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
