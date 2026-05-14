@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -361,26 +362,49 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Default backup path",
+                    "Default backup folder (full path)",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(4.dp))
                 SelectionContainer {
                     Text(
+                        // Already an absolute path from
+                        // Context.getExternalFilesDir(...).absolutePath, but
+                        // wrap explicitly + bump line height a touch so the
+                        // long path stays readable when it overflows to two
+                        // or three lines on narrow phones.
                         localBackupPath,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                            .padding(10.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 16.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        softWrap = true
                     )
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
-                    onClick = { chooseBackupFolder.launch(null) },
+                    onClick = {
+                        // Some OEM builds ship without a Storage Access
+                        // Framework picker or block the implicit intent —
+                        // OpenDocumentTree throws ActivityNotFoundException
+                        // there. Surface a friendly snackbar instead of
+                        // crashing or doing nothing.
+                        runCatching { chooseBackupFolder.launch(null) }
+                            .onFailure {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        "No file picker available on this device. Backups will stay in PettiBox storage."
+                                    )
+                                }
+                            }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -448,10 +472,15 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Import backup ZIP or JSON", fontWeight = FontWeight.Bold)
+                    Text("Import backup", fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(Modifier.height(16.dp).navigationBarsPadding())
+            // Outer NavGraph Scaffold already pads for the bottom nav, and
+            // this screen's Scaffold uses WindowInsets(0) to avoid double
+            // padding — so this trailing spacer just adds breathing room
+            // below the last section. The earlier .navigationBarsPadding()
+            // chained after .height() was double-counting the inset.
+            Spacer(Modifier.height(20.dp))
             }
         }
     }

@@ -77,7 +77,7 @@ import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
-import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
@@ -227,7 +227,7 @@ fun HomeScreen(
     }
 
     customReminderItem?.let { item ->
-        ReminderCustomDialog(
+        ReminderCustomSheet(
             onConfirm = { at ->
                 customReminderItem = null
                 requestNotificationPermission { viewModel.setRemindAt(item, at) }
@@ -274,12 +274,13 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Spacer(Modifier.height(10.dp))
+                // FirstRunGuide already exposes the primary "Add something
+                // now" call-to-action; this empty state is purely an
+                // explainer below it. Repeating the button was confusing.
                 EmptyState(
                     emoji = "\uD83D\uDCE5",
                     headline = "PettiBox lives in your Share menu",
                     body = "In YouTube, Instagram, Chrome, Photos, or Files, tap Share and choose PettiBox. Pick a collection and it becomes searchable.",
-                    cta = "Add something now",
-                    onCta = openQuickNote,
                     fillScreen = false
                 )
             }
