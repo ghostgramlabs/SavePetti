@@ -3,28 +3,38 @@ package com.ghostgramlabs.pettibox.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +48,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Quick-pick reminder presets that map to wall-clock times relative to
@@ -226,83 +237,183 @@ private fun ReminderRow(
 }
 
 /**
- * Modal dialog for picking a date and time. Used when the user taps
- * "Pick a time…" in [ReminderPickerSheet].
+ * Bottom sheet for picking an arbitrary date + time as a reminder.
  *
- * Implementation note: we use Material3 TimePicker for the time and
- * advance the calendar by N days via a small numeric row — full
- * DatePickerDialog would be more correct but adds complexity for
- * marginal gain. Most "custom" reminders are within the next 2 weeks.
+ * Replaces the prior ReminderCustomDialog which crammed a TimePicker
+ * on top of a 4-chip "Day" row in an AlertDialog — the day picker was
+ * tiny and hidden, and there was no preview of when the reminder would
+ * actually fire. The new sheet:
+ *
+ *  - Shows a live "We'll nudge you Thu, May 14 · 9:00 PM" preview at
+ *    the top, in the primary color, that updates as the user changes
+ *    either tab.
+ *  - Splits Date and Time into proper tabs so each picker gets the
+ *    full sheet width instead of fighting for space.
+ *  - Uses Material3 [DatePicker] (full calendar grid, any future date)
+ *    instead of the four hardcoded day chips.
+ *  - Disables the Set button until the combined timestamp is in the
+ *    future, so the user can't accidentally schedule a reminder for
+ *    five minutes ago.
+ *
+ * Date/time combination is timezone-correct: DatePicker returns UTC
+ * midnight of the picked day, which we read in UTC and then re-construct
+ * as a local-time Calendar at the picked hour and minute.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReminderCustomDialog(
+fun ReminderCustomSheet(
     onConfirm: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val initial = Calendar.getInstance().apply {
-        add(Calendar.HOUR_OF_DAY, 1)
-        set(Calendar.MINUTE, 0)
+    val initial = remember {
+        Calendar.getInstance().apply {
+            add(Calendar.HOUR_OF_DAY, 1)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
     }
+    // DatePicker stores its selection in UTC midnight of the user's
+    // picked day — convert the LOCAL initial date to a UTC midnight of
+    // the same calendar day so the picker opens on "today" wherever the
+    // user is, not on yesterday for users east of UTC.
+    val initialUtcDay = remember {
+        Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            set(
+                initial.get(Calendar.YEAR),
+                initial.get(Calendar.MONTH),
+                initial.get(Calendar.DAY_OF_MONTH),
+                0, 0, 0
+            )
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = initialUtcDay)
     val timeState = rememberTimePickerState(
         initialHour = initial.get(Calendar.HOUR_OF_DAY),
         initialMinute = initial.get(Calendar.MINUTE),
         is24Hour = false
     )
-    var daysFromNow by remember { mutableStateOf(0) }
+    var tab by remember { mutableStateOf(0) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AlertDialog(
+    val combined: Long? by remember {
+        derivedStateOf {
+            val d = dateState.selectedDateMillis ?: return@derivedStateOf null
+            // Read the picked day's year/month/day in UTC, then build a
+            // local Calendar for the user's timezone at the picked hour.
+            val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = d }
+            Calendar.getInstance().apply {
+                set(
+                    utc.get(Calendar.YEAR),
+                    utc.get(Calendar.MONTH),
+                    utc.get(Calendar.DAY_OF_MONTH),
+                    timeState.hour,
+                    timeState.minute,
+                    0
+                )
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
+    }
+    val isFuture by remember {
+        derivedStateOf { (combined ?: 0L) > System.currentTimeMillis() }
+    }
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Pick a time") },
-        text = {
-            Column {
-                TimePicker(state = timeState)
-                Spacer(Modifier.height(12.dp))
-                Text("Day", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val options = listOf(0 to "Today", 1 to "Tomorrow", 2 to "+2 days", 7 to "+1 week")
-                    options.forEach { (offset, label) ->
-                        val selected = daysFromNow == offset
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                            ),
-                            color = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (selected)
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                    else MaterialTheme.colorScheme.surface
-                                )
-                                .clickable { daysFromNow = offset }
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
-                        )
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 4.dp)
+                .heightIn(max = 720.dp)
+        ) {
+            Text(
+                "Custom reminder",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            // Live preview — updates as either tab changes. Primary
+            // color when valid, muted hint when in the past so the user
+            // notices before tapping Set.
+            Text(
+                when {
+                    combined == null -> "Pick a date and time"
+                    !isFuture -> "That time is already in the past — pick a future moment"
+                    else -> "We'll nudge you " + formatReminderAt(combined!!)
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = if (isFuture) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            SecondaryTabRow(
+                selectedTabIndex = tab,
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Tab(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    text = { Text("Date", fontWeight = FontWeight.SemiBold) }
+                )
+                Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = { Text("Time", fontWeight = FontWeight.SemiBold) }
+                )
+            }
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 360.dp, max = 460.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp)
+            ) {
+                when (tab) {
+                    0 -> DatePicker(
+                        state = dateState,
+                        modifier = Modifier.fillMaxWidth(),
+                        title = null,
+                        headline = null,
+                        showModeToggle = false
+                    )
+                    else -> Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TimePicker(state = timeState)
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val cal = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_MONTH, daysFromNow)
-                    set(Calendar.HOUR_OF_DAY, timeState.hour)
-                    set(Calendar.MINUTE, timeState.minute)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                onConfirm(cal.timeInMillis)
-            }) { Text("Set") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        shape = RoundedCornerShape(20.dp)
-    )
+
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = isFuture,
+                    onClick = { combined?.let(onConfirm) },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Set reminder", fontWeight = FontWeight.Bold) }
+            }
+            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
 }

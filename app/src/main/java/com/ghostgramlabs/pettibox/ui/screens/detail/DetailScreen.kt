@@ -90,7 +90,7 @@ import com.ghostgramlabs.pettibox.data.util.TimeFormat
 import com.ghostgramlabs.pettibox.domain.model.ContentType
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
-import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
@@ -188,7 +188,7 @@ fun DetailScreen(
     }
 
     if (showCustomReminder) {
-        ReminderCustomDialog(
+        ReminderCustomSheet(
             onConfirm = { at ->
                 showCustomReminder = false
                 requestNotificationPermission {

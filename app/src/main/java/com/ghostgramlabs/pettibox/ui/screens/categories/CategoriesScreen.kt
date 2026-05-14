@@ -62,7 +62,7 @@ import com.ghostgramlabs.pettibox.ui.components.CollectionColorSeeds
 import com.ghostgramlabs.pettibox.ui.components.CollectionEmojiSeeds
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
-import com.ghostgramlabs.pettibox.ui.components.ReminderCustomDialog
+import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
@@ -145,7 +145,7 @@ fun CategoriesScreen(
         )
     }
     customReminderItem?.let { item ->
-        ReminderCustomDialog(
+        ReminderCustomSheet(
             onConfirm = { at ->
                 customReminderItem = null
                 requestNotificationPermission { viewModel.setRemindAt(item, at) }
