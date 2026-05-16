@@ -29,8 +29,11 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
@@ -168,8 +171,8 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             ScreenHeading(
-                title = "Settings",
-                subtitle = "How PettiBox looks, plus a backup whenever you need one."
+                title = "Make it yours",
+                subtitle = "Appearance, collections, scans, and backups — your shelf, your rules."
             )
 
             Spacer(Modifier.height(8.dp))
@@ -290,7 +293,15 @@ fun SettingsScreen(
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Help") {
                 HelpFlow()
-                Spacer(Modifier.height(10.dp))
+
+                // Grouped instead of a flat 10-row list — earlier the Help
+                // section just stacked HelpItem rows until they read as a
+                // FAQ dump. Three buckets keep each subsection short
+                // enough to scan, and let us add the new features
+                // (Favorites, Archive, Tags, Settings → New collection)
+                // without making the wall taller.
+                Spacer(Modifier.height(14.dp))
+                HelpGroupTitle("The basics")
                 HelpItem(
                     title = "Save from any app",
                     body = "In YouTube, Instagram, Chrome, Photos, Files, or another app, tap Share and choose PettiBox. Pick a collection and it saves instantly.",
@@ -307,34 +318,50 @@ fun SettingsScreen(
                     icon = Icons.Rounded.Search
                 )
                 HelpItem(
-                    title = "Keep things organized",
-                    body = "Collections help group saves. You can create your own collections and edit their name, icon, and color.",
-                    icon = Icons.Rounded.LightMode
+                    title = "Make a new collection",
+                    body = "Settings → Create a collection. Pick a name, emoji, and color — it shows up in Browse and in the share sheet.",
+                    icon = Icons.Rounded.GridView
                 )
-                HelpItem(
-                    title = "Text recognition is optional",
-                    body = "Auto-scan makes screenshots and PDFs searchable. Large PDFs are indexed for the first 30 pages to keep the app fast.",
-                    icon = Icons.AutoMirrored.Rounded.TextSnippet
-                )
-                HelpItem(
-                    title = "Share and remove safely",
-                    body = "Open a saved item to share one attachment from a group, swipe through items, or remove an attachment with Undo.",
-                    icon = Icons.Rounded.Share
-                )
+
+                Spacer(Modifier.height(14.dp))
+                HelpGroupTitle("Get more out of it")
                 HelpItem(
                     title = "Long-press for quick actions",
                     body = "Press and hold any save to pin, favorite, archive, snooze a reminder, move it to a collection, or delete — without opening it.",
                     icon = Icons.Rounded.TouchApp
                 )
                 HelpItem(
-                    title = "Remind me later",
-                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom time. A notification opens the save when it fires.",
-                    icon = Icons.Rounded.AccessTime
+                    title = "Love it — see all favorites",
+                    body = "Tap the heart on a save (or long-press → ❤️). Open Browse → Favorites to see every save you've hearted, all in one place.",
+                    icon = Icons.Rounded.Favorite
+                )
+                HelpItem(
+                    title = "Tags cut across collections",
+                    body = "A save lives in one collection, but can carry many tags. Add tags from the save sheet or the detail screen. Open Browse → Tags to see every tag with its save count.",
+                    icon = Icons.Rounded.LocalOffer
                 )
                 HelpItem(
                     title = "Archive when you're done",
-                    body = "Archived saves disappear from Home but stay searchable. Browse a collection and tap the archive icon to flip between active and archived views.",
+                    body = "Archived saves disappear from Home but stay searchable. Browse → Archive shows every archived save across all collections — even ones with no collection.",
                     icon = Icons.Rounded.Archive
+                )
+                HelpItem(
+                    title = "Remind me later",
+                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom date and time. Reminders fire on the dot and survive a phone restart.",
+                    icon = Icons.Rounded.AccessTime
+                )
+                HelpItem(
+                    title = "Text recognition is optional",
+                    body = "Auto-scan makes screenshots and PDFs searchable. Large PDFs are indexed for the first 30 pages to keep the app fast.",
+                    icon = Icons.AutoMirrored.Rounded.TextSnippet
+                )
+
+                Spacer(Modifier.height(14.dp))
+                HelpGroupTitle("Backups & safety")
+                HelpItem(
+                    title = "Share and remove safely",
+                    body = "Open a saved item to share one attachment from a group, swipe through items, or remove an attachment with Undo.",
+                    icon = Icons.Rounded.Share
                 )
                 HelpItem(
                     title = "Back up your shelf",
@@ -610,6 +637,24 @@ private fun HelpStep(
             )
         }
     }
+}
+
+/**
+ * Subhead inside the Help section. Smaller and quieter than a section
+ * title — just enough to break a long Help block into scannable groups
+ * without making the page look like a TOC.
+ */
+@Composable
+private fun HelpGroupTitle(title: String) {
+    Text(
+        title.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp
+        ),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+    )
 }
 
 @Composable

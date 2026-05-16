@@ -439,17 +439,23 @@ private fun HomeOnboardingDialog(
         OnboardingStep(
             icon = Icons.Rounded.Share,
             title = "Save from any app",
-            body = "Tap Share in YouTube, Instagram, Chrome, Photos, or Files, then choose PettiBox."
+            body = "Tap Share in YouTube, Instagram, Chrome, Photos, or Files, then choose PettiBox.",
+            tip = null
         ),
         OnboardingStep(
             icon = Icons.Rounded.GridView,
             title = "Pick a collection",
-            body = "Choose a collection while saving so links, screenshots, PDFs, and notes stay organized."
+            body = "Choose a collection while saving so links, screenshots, PDFs, and notes stay organized.",
+            tip = null
         ),
         OnboardingStep(
             icon = Icons.Rounded.Search,
             title = "Find it later",
-            body = "Search titles, notes, tags, links, and text extracted from images or PDFs."
+            body = "Search titles, notes, tags, links, and text extracted from images or PDFs.",
+            // One-line discovery hint for the single most-leveraged
+            // interaction in the app. Long-press is invisible without
+            // it being said somewhere.
+            tip = "Tip: long-press any save for pin, archive, remind, or move."
         )
     )
     val current = steps[page]
@@ -470,6 +476,14 @@ private fun HomeOnboardingDialog(
         text = {
             Column {
                 Text(current.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (current.tip != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        current.tip,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     steps.indices.forEach { i ->
@@ -505,7 +519,8 @@ private fun HomeOnboardingDialog(
 private data class OnboardingStep(
     val icon: ImageVector,
     val title: String,
-    val body: String
+    val body: String,
+    val tip: String? = null
 )
 
 @Composable

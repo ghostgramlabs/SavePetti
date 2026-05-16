@@ -412,6 +412,36 @@ fun DetailScreen(
                     onSave = viewModel::updateTitle
                 )
 
+                // Reminder callout. Was previously surfaced only as a
+                // clock icon in the action bar — the user couldn't see
+                // when they'd be nudged without re-opening the picker.
+                // Tappable: jumps back into the picker for re-snooze or
+                // clear.
+                if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(accent.copy(alpha = 0.16f))
+                            .clickable { showReminderSheet = true }
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.AccessTime,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "We'll nudge you " + formatReminderAt(item.remindAt),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = accent
+                        )
+                    }
+                }
+
                 if (!item.url.isNullOrBlank()) {
                     Spacer(Modifier.height(16.dp))
                     Row(

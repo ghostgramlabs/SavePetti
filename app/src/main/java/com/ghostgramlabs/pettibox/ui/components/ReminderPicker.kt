@@ -114,6 +114,38 @@ fun ReminderPreset.toEpochMillis(now: Long = System.currentTimeMillis()): Long? 
 }
 
 /**
+ * Compact 2-column-card-friendly version of [formatReminderAt]. Drops
+ * `:00` minutes, lowercases am/pm, and skips the leading "Today" so the
+ * label fits as a footer pill on small cards (≈150 dp wide):
+ *
+ *   "9pm"           when same day
+ *   "Tomorrow 9am"  when next day
+ *   "Sat 10am"      within a week
+ *   "Dec 3 9am"     beyond a week
+ */
+fun formatReminderCompact(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
+    val cal = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    val nowCal = Calendar.getInstance().apply { timeInMillis = now }
+    val sameDay = cal.get(Calendar.YEAR) == nowCal.get(Calendar.YEAR) &&
+        cal.get(Calendar.DAY_OF_YEAR) == nowCal.get(Calendar.DAY_OF_YEAR)
+    val tomorrowCal = (nowCal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
+    val isTomorrow = cal.get(Calendar.YEAR) == tomorrowCal.get(Calendar.YEAR) &&
+        cal.get(Calendar.DAY_OF_YEAR) == tomorrowCal.get(Calendar.DAY_OF_YEAR)
+    val withinWeek = (epochMillis - now) in 0..(7L * 24 * 3600 * 1000)
+    val minutes = cal.get(Calendar.MINUTE)
+    val timeFmt = SimpleDateFormat(if (minutes == 0) "h a" else "h:mm a", Locale.getDefault())
+    val timeStr = timeFmt.format(Date(epochMillis))
+        .replace(" AM", "am")
+        .replace(" PM", "pm")
+    return when {
+        sameDay -> timeStr
+        isTomorrow -> "Tomorrow $timeStr"
+        withinWeek -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(epochMillis)) + " $timeStr"
+        else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(epochMillis)) + " $timeStr"
+    }
+}
+
+/**
  * Friendly preview of when a reminder will fire — e.g. "Sat 10:00 AM"
  * or "Tomorrow 9:00 AM" or "Dec 3, 9:00 AM" for things further out.
  */

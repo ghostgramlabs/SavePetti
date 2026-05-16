@@ -163,7 +163,7 @@ fun SaveSheet(
         }
     ) {
         if (state.isSaved) {
-            SuccessPanel()
+            SuccessPanel(remindAt = state.remindAt)
             return@ModalBottomSheet
         }
         if (state.mode == SaveMode.PICK_EXISTING) {
@@ -564,7 +564,7 @@ private fun AddChip(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SuccessPanel() {
+private fun SuccessPanel(remindAt: Long? = null) {
     val accent = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier
@@ -592,10 +592,18 @@ private fun SuccessPanel() {
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(Modifier.height(6.dp))
+        // Confirm the reminder time inline. Without this, the user
+        // taps Save with a reminder set and gets a generic "Saved!"
+        // with no acknowledgement that the nudge actually landed —
+        // confidence in the reminder feature drops to zero.
         Text(
-            "Find it from the home screen anytime.",
+            if (remindAt != null && remindAt > System.currentTimeMillis())
+                "We'll nudge you " + formatReminderAt(remindAt)
+            else
+                "Find it from the home screen anytime.",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (remindAt != null && remindAt > System.currentTimeMillis())
+                accent else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Notes
@@ -295,6 +296,15 @@ private fun StickyNoteCard(
                     maxLines = 3
                 )
             }
+            // Reminder pill above the meta row so the user can read WHEN
+            // they'll be nudged without opening the save. The bare clock
+            // icon that used to live in the meta row was a feature
+            // half-shown — the most useful piece of metadata (the time)
+            // was hidden one tap away.
+            if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+                Spacer(Modifier.height(8.dp))
+                ReminderPill(remindAt = item.remindAt, accent = accent)
+            }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SourceStamp(source = source, accent = ink)
@@ -304,10 +314,6 @@ private fun StickyNoteCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = ink.copy(alpha = 0.6f)
                 )
-                if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Rounded.AccessTime, null, tint = accent, modifier = Modifier.size(13.dp))
-                }
                 if (item.isPinned) {
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(14.dp))
@@ -410,51 +416,78 @@ private fun FooterMeta(
     omitSource: Boolean
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (categoryEmoji != null && categoryName != null) {
-            Box(
-                Modifier
-                    .background(accent.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    "$categoryEmoji $categoryName",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent
+    Column {
+        // Reminder pill is its own row above the meta line. Putting the
+        // time inline with pin/favorite icons either overflowed the
+        // 2-column card or pushed the relative-saved-time off-screen.
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            ReminderPill(remindAt = item.remindAt, accent = accent)
+            Spacer(Modifier.height(6.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (categoryEmoji != null && categoryName != null) {
+                Box(
+                    Modifier
+                        .background(accent.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        "$categoryEmoji $categoryName",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent
+                    )
+                }
+                Spacer(Modifier.size(8.dp))
+            }
+            Text(
+                text = if (omitSource) TimeFormat.relative(item.createdAt)
+                       else "${source.emoji} ${TimeFormat.relative(item.createdAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            if (item.isPinned) {
+                Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(16.dp))
+            }
+            if (item.isFavorite) {
+                Spacer(Modifier.size(4.dp))
+                Icon(
+                    Icons.Rounded.Favorite, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
                 )
             }
-            Spacer(Modifier.size(8.dp))
         }
-        Text(
-            text = if (omitSource) TimeFormat.relative(item.createdAt)
-                   else "${source.emoji} ${TimeFormat.relative(item.createdAt)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = scheme.onSurfaceVariant
+    }
+}
+
+/**
+ * Compact reminder label used in card footers. Renders as a tinted
+ * pill — clock glyph + a short time string from [formatReminderCompact].
+ * Sized for 150 dp-wide cards: "Tomorrow 9am" comfortably fits, longer
+ * forms (e.g. "Dec 3 9am") still fit on one line.
+ */
+@Composable
+private fun ReminderPill(remindAt: Long, accent: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(accent.copy(alpha = 0.18f), CircleShape)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Icon(
+            Icons.Rounded.AccessTime,
+            contentDescription = "Reminder",
+            tint = accent,
+            modifier = Modifier.size(11.dp)
         )
-        Spacer(Modifier.weight(1f))
-        // Pending reminder glyph — only shows for future reminders. Past-due
-        // reminders are kept invisible because the worker should be
-        // clearing them imminently; double-rendering them in the card
-        // would just confuse the user.
-        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
-            Icon(
-                Icons.Rounded.AccessTime, null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(Modifier.size(4.dp))
-        }
-        if (item.isPinned) {
-            Icon(Icons.Rounded.Bookmark, null, tint = accent, modifier = Modifier.size(16.dp))
-        }
-        if (item.isFavorite) {
-            Spacer(Modifier.size(4.dp))
-            Icon(
-                Icons.Rounded.Favorite, null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
+        Spacer(Modifier.size(4.dp))
+        Text(
+            com.ghostgramlabs.pettibox.ui.components.formatReminderCompact(remindAt),
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
