@@ -26,11 +26,13 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoveDown
 import androidx.compose.material.icons.rounded.Unarchive
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,6 +72,26 @@ fun QuickActionSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showMove by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete this save?") },
+            text = { Text("This is permanent. Archive keeps it searchable if you might need it later.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                    onDismiss()
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -144,7 +166,7 @@ fun QuickActionSheet(
                 icon = Icons.Rounded.Delete,
                 title = "Delete",
                 tint = MaterialTheme.colorScheme.error,
-                onClick = { onDelete(); onDismiss() }
+                onClick = { showDeleteConfirm = true }
             )
         }
     }

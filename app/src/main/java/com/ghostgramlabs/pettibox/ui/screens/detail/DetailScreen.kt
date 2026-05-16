@@ -779,7 +779,7 @@ private fun AttachmentPreview(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(scheme.surface.copy(alpha = 0.92f))
-                    .size(40.dp)
+                    .size(48.dp)
             ) {
                 Icon(Icons.Rounded.Share, contentDescription = "Share this item", tint = scheme.primary)
             }
@@ -789,7 +789,7 @@ private fun AttachmentPreview(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(scheme.surface.copy(alpha = 0.92f))
-                        .size(40.dp)
+                        .size(48.dp)
                 ) {
                     Icon(Icons.Rounded.Delete, contentDescription = "Delete this item", tint = scheme.error)
                 }
@@ -1029,46 +1029,54 @@ private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
     var focused by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val accent = MaterialTheme.colorScheme.primary
 
-    Row(verticalAlignment = Alignment.Top) {
-        androidx.compose.foundation.text.BasicTextField(
-            value = value,
-            onValueChange = { value = it },
-            textStyle = MaterialTheme.typography.headlineLarge.copy(
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground
-            ),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(accent),
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 8.dp)
-                .let { m ->
-                    // Hairline underline only when focused, so the user knows
-                    // their keystrokes are landing.
-                    if (focused) m.drawBehind {
-                        val y = size.height
-                        drawLine(
-                            color = accent,
-                            start = androidx.compose.ui.geometry.Offset(0f, y),
-                            end = androidx.compose.ui.geometry.Offset(size.width, y),
-                            strokeWidth = 2f
-                        )
-                    } else m
-                }
-                .onFocusChanged { fs ->
-                    if (focused && !fs.isFocused) {
-                        if (value != initial) onSave(value)
+    Column {
+        Text(
+            "Title",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = { value = it },
+                textStyle = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                    .let { m ->
+                        // Hairline underline only when focused, so the user knows
+                        // their keystrokes are landing.
+                        if (focused) m.drawBehind {
+                            val y = size.height
+                            drawLine(
+                                color = accent,
+                                start = androidx.compose.ui.geometry.Offset(0f, y),
+                                end = androidx.compose.ui.geometry.Offset(size.width, y),
+                                strokeWidth = 2f
+                            )
+                        } else m
                     }
-                    focused = fs.isFocused
-                }
-        )
-        Icon(
-            imageVector = Icons.Rounded.Edit,
-            contentDescription = "Edit title",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(top = 6.dp)
-                .size(18.dp)
-        )
+                    .onFocusChanged { fs ->
+                        if (focused && !fs.isFocused) {
+                            if (value != initial) onSave(value)
+                        }
+                        focused = fs.isFocused
+                    }
+            )
+            Icon(
+                imageVector = Icons.Rounded.Edit,
+                contentDescription = "Edit title",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .size(18.dp)
+            )
+        }
     }
 }
 

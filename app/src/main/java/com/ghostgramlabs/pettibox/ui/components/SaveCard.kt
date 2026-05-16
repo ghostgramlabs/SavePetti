@@ -27,10 +27,13 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,7 +104,11 @@ private fun Modifier.cardClickable(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?
 ): Modifier = if (onLongClick != null) {
-    this.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    this.combinedClickable(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onLongClickLabel = "Open quick actions"
+    )
 } else {
     this.clickable(onClick = onClick)
 }
@@ -161,6 +168,10 @@ private fun PolaroidCard(
             Spacer(Modifier.height(6.dp))
         }
         if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+        if (onLongClick != null) CardActionButton(
+            onClick = onLongClick,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+        )
     }
 }
 
@@ -241,6 +252,10 @@ private fun LinkBookmarkCard(
             }
         }
         if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+        if (onLongClick != null) CardActionButton(
+            onClick = onLongClick,
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+        )
     }
 }
 
@@ -333,6 +348,10 @@ private fun StickyNoteCard(
             }
         }
         if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+        if (onLongClick != null) CardActionButton(
+            onClick = onLongClick,
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+        )
     }
 }
 
@@ -401,6 +420,29 @@ private fun PaperclipCard(
         }
         Paperclip(Modifier.align(Alignment.TopCenter))
         if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
+        if (onLongClick != null) CardActionButton(
+            onClick = onLongClick,
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+        )
+    }
+}
+
+@Composable
+private fun CardActionButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+    ) {
+        Icon(
+            Icons.Rounded.MoreHoriz,
+            contentDescription = "Open quick actions",
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

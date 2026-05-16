@@ -311,7 +311,7 @@ fun HomeScreen(
         }
 
         LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(2),
+            columns = StaggeredGridCells.Adaptive(156.dp),
             contentPadding = PaddingValues(
                 start = 12.dp, end = 12.dp,
                 top = 0.dp, bottom = padding.calculateBottomPadding() + 96.dp
@@ -608,7 +608,7 @@ private fun FirstRunGuide(
         GuideStep(
             icon = Icons.Rounded.GridView,
             title = "Choose PettiBox",
-            body = "Pick a collection and it saves instantly to your shelf."
+            body = "Pick a collection, add any note or reminder, then tap Save."
         )
         Spacer(Modifier.height(10.dp))
         GuideStep(

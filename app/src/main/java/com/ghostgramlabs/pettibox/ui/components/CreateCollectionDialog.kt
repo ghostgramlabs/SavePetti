@@ -99,7 +99,7 @@ fun CreateCollectionDialog(
                         val selected = e == emoji
                         Box(
                             Modifier
-                                .size(40.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(
                                     if (selected) color.copy(alpha = 0.18f)
@@ -128,7 +128,7 @@ fun CreateCollectionDialog(
                         val selected = c == color
                         Box(
                             Modifier
-                                .size(36.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(c)
                                 .border(

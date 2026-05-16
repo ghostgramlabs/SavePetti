@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -217,18 +219,13 @@ private fun BrowseGrid(
     onOpenTags: () -> Unit
 ) {
     ScreenHeading(
-        title = "Browse",
-        leading = {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-            }
-        }
+        title = "Browse"
     )
     // A staggered grid would be wrong here — the special row needs a
     // full-line span so the three pills always sit on one row and the
     // collection grid lives in its own 2-up rhythm beneath.
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
+        columns = StaggeredGridCells.Adaptive(156.dp),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp),
         verticalItemSpacing = 12.dp,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -304,10 +301,12 @@ private data class SpecialEntry(
     val onClick: () -> Unit
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpecialRow(items: List<SpecialEntry>) {
-    Row(
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         items.forEach { e ->
@@ -549,7 +548,7 @@ private fun DrillView(
     }
 
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
+        columns = StaggeredGridCells.Adaptive(156.dp),
         contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 4.dp),
         verticalItemSpacing = 12.dp,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

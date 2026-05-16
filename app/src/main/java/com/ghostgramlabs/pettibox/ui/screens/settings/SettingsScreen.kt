@@ -104,6 +104,7 @@ fun SettingsScreen(
     )
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
     var showCreateCollection by remember { mutableStateOf(false) }
+    var showHelpDetails by remember { mutableStateOf(false) }
     if (showCreateCollection) {
         CreateCollectionDialog(
             onCreate = { newCollection ->
@@ -293,6 +294,18 @@ fun SettingsScreen(
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Help") {
                 HelpFlow()
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { showHelpDetails = !showHelpDetails },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        if (showHelpDetails) "Hide detailed guide" else "Show detailed guide",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (showHelpDetails) {
 
                 // Grouped instead of a flat 10-row list — earlier the Help
                 // section just stacked HelpItem rows until they read as a
@@ -304,7 +317,7 @@ fun SettingsScreen(
                 HelpGroupTitle("The basics")
                 HelpItem(
                     title = "Save from any app",
-                    body = "In YouTube, Instagram, Chrome, Photos, Files, or another app, tap Share and choose PettiBox. Pick a collection and it saves instantly.",
+                    body = "In YouTube, Instagram, Chrome, Photos, Files, or another app, tap Share and choose PettiBox. Pick a collection, then save.",
                     icon = Icons.Rounded.Share
                 )
                 HelpItem(
@@ -368,6 +381,7 @@ fun SettingsScreen(
                     body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup keeps the 3 most recent ZIPs on this device, and can also copy each one to a folder you choose.",
                     icon = Icons.Rounded.Download
                 )
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -593,7 +607,7 @@ private fun HelpFlow() {
         Spacer(Modifier.height(8.dp))
         HelpStep(number = "1", title = "Tap Share", body = "Use the Share button in the app where you found something.")
         HelpStep(number = "2", title = "Choose PettiBox", body = "PettiBox appears in Android's share menu for links, text, images, PDFs, and files.")
-        HelpStep(number = "3", title = "Pick a collection", body = "Tap a collection chip. PettiBox saves immediately.")
+        HelpStep(number = "3", title = "Pick a collection", body = "Tap a collection chip, add any note or reminder, then save.")
         HelpStep(number = "4", title = "Search later", body = "Find it by title, note, tag, source, link, or text inside images and PDFs.")
     }
 }

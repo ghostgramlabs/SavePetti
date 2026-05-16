@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,6 +92,8 @@ fun SaveSheet(
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     val titleFocus = remember { FocusRequester() }
     val haptics = LocalHapticFeedback.current
+    val selectedCategoryName = state.categories.firstOrNull { it.id == state.selectedCategory }?.name
+        ?: if (state.selectedCategory != null) "collection" else null
 
     if (showReminderPicker) {
         ReminderPickerSheet(
@@ -282,9 +283,9 @@ fun SaveSheet(
                         // worse than no suggestion.
                         suggested = state.selectedCategory == null &&
                             state.suggestedCategory == c.id,
-                        // Stash flow: tapping a collection IS the save.
-                        // The bottom-bar Save button is a fallback for
-                        // saves the user wants to keep uncategorized.
+                        // Tap selects the destination; the sticky footer
+                        // commits. This keeps the flow fast without
+                        // accidentally saving before notes/tags/reminder.
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.saveToCategory(c.id)
@@ -368,26 +369,19 @@ fun SaveSheet(
                 )
             }
             Spacer(Modifier.weight(1f))
-            // No-collection fallback. Picking a collection above already
-            // saves; this OutlinedButton matches the "Append to a save"
-            // and "Choose backup folder" style — same secondary visual
-            // weight, distinct from the chunky filled chips above.
-            OutlinedButton(
+            Button(
                 onClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.save()
                 },
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.5.dp,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Text(
-                    if (state.selectedCategory == null) "Save without collection" else "Save",
+                    selectedCategoryName?.let { "Save to $it" } ?: "Save without collection",
                     fontWeight = FontWeight.SemiBold
                 )
             }
