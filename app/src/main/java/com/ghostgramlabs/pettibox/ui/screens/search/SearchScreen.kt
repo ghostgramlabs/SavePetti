@@ -165,7 +165,7 @@ fun SearchScreen(
         Column(Modifier.padding(padding).fillMaxSize()) {
             ScreenHeading(
                 title = "Look it up",
-                subtitle = "Titles, notes, sources, even text inside images."
+                subtitle = "Titles, notes, sources, and English text inside images."
             )
             SearchField(
                 value = state.query,
@@ -187,6 +187,10 @@ fun SearchScreen(
                 onToggleSource = viewModel::toggleSource,
                 onToggleTag = viewModel::toggleTag
             )
+            if (state.results.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                SearchSortStrip(selected = state.sort, onSelect = viewModel::setSort)
+            }
 
             Spacer(Modifier.height(8.dp))
 
@@ -208,13 +212,13 @@ fun SearchScreen(
                     EmptyState(
                         emoji = "\uD83D\uDD0D",
                         headline = "Find anything you stashed",
-                        body = "Type a word from a title, note, source, link, tag, or text inside an image or PDF. Older screenshots are still indexing \u2014 give them a moment."
+                        body = "Type a word from a title, note, source, link, tag, or English text inside an image or PDF. Other languages may be partial."
                     )
                 }
                 state.results.isEmpty() -> EmptyState(
                     emoji = "\uD83E\uDD14",
                     headline = "Nothing matched",
-                    body = "Try a shorter word, drop a filter, or check the spelling. OCR keeps catching up in the background \u2014 it might find it in a moment."
+                    body = "Try a shorter word, drop a filter, or check the spelling. OCR works best with English and may still be catching up."
                 )
                 else -> {
                     LazyVerticalStaggeredGrid(
@@ -250,6 +254,40 @@ fun SearchScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchSortStrip(selected: SearchSort, onSelect: (SearchSort) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(SearchSort.entries, key = { it.name }) { sort ->
+            val active = selected == sort
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.surface
+                    )
+                    .border(
+                        1.dp,
+                        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onSelect(sort) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    sort.label,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }

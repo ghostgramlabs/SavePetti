@@ -32,8 +32,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
@@ -91,6 +94,7 @@ fun CategoriesScreen(
     }
     var showDeleteCategory by remember { mutableStateOf(false) }
     var showEditCategory by remember { mutableStateOf(false) }
+    var selectedItems by remember(destination) { mutableStateOf<Set<Long>>(emptySet()) }
     // O(1) lookup for items rendered in special destinations where we
     // don't have a hand-picked accent color (Favorites, Archive, Tag drill).
     val categoriesById = remember(state.categories) {
@@ -182,6 +186,7 @@ fun CategoriesScreen(
                     onSelectCategory = { id -> viewModel.navigate(BrowseDestination.Category(id)) },
                     onOpenFavorites = { viewModel.navigate(BrowseDestination.Favorites) },
                     onOpenArchive = { viewModel.navigate(BrowseDestination.Archive) },
+                    onOpenReminders = { viewModel.navigate(BrowseDestination.Reminders) },
                     onOpenTags = { viewModel.navigate(BrowseDestination.TagList) }
                 )
 
@@ -200,6 +205,21 @@ fun CategoriesScreen(
                     onToggleArchived = { viewModel.toggleArchivedView() },
                     onEditCategory = { showEditCategory = true },
                     onDeleteCategory = { showDeleteCategory = true },
+                    sort = state.sort,
+                    onSort = viewModel::setSort,
+                    selectedIds = selectedItems,
+                    onToggleSelect = { item ->
+                        selectedItems = if (item.id in selectedItems) selectedItems - item.id else selectedItems + item.id
+                    },
+                    onClearSelection = { selectedItems = emptySet() },
+                    onArchiveSelected = { items ->
+                        viewModel.archiveItems(items)
+                        selectedItems = emptySet()
+                    },
+                    onDeleteSelected = { items ->
+                        viewModel.deleteItems(items)
+                        selectedItems = emptySet()
+                    },
                     onOpenItem = onOpenItem,
                     onLongPressItem = { quickActionItem = it },
                     drillItems = viewModel.drillItems
@@ -207,6 +227,7 @@ fun CategoriesScreen(
             }
         }
     }
+
 }
 
 @Composable
@@ -216,6 +237,7 @@ private fun BrowseGrid(
     onSelectCategory: (String) -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenArchive: () -> Unit,
+    onOpenReminders: () -> Unit,
     onOpenTags: () -> Unit
 ) {
     ScreenHeading(
@@ -253,6 +275,13 @@ private fun BrowseGrid(
                             count = state.archivedCount,
                             accent = Color(0xFF8B7355),
                             onClick = onOpenArchive
+                        ),
+                        SpecialEntry(
+                            icon = Icons.Rounded.AccessTime,
+                            label = "Reminders",
+                            count = state.reminderCount,
+                            accent = Color(0xFF2F9B8F),
+                            onClick = onOpenReminders
                         ),
                         SpecialEntry(
                             icon = Icons.Rounded.LocalOffer,
@@ -448,13 +477,22 @@ private fun DrillView(
     onToggleArchived: () -> Unit,
     onEditCategory: () -> Unit,
     onDeleteCategory: () -> Unit,
+    sort: BrowseSort,
+    onSort: (BrowseSort) -> Unit,
+    selectedIds: Set<Long>,
+    onToggleSelect: (SaveItemEntity) -> Unit,
+    onClearSelection: () -> Unit,
+    onArchiveSelected: (List<SaveItemEntity>) -> Unit,
+    onDeleteSelected: (List<SaveItemEntity>) -> Unit,
     onOpenItem: (Long) -> Unit,
     onLongPressItem: (SaveItemEntity) -> Unit,
     drillItems: kotlinx.coroutines.flow.Flow<androidx.paging.PagingData<SaveItemEntity>>
 ) {
+    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     val title = when (destination) {
         BrowseDestination.Favorites -> "❤️ Favorites"
         BrowseDestination.Archive -> "🗃 Archive"
+        BrowseDestination.Reminders -> "Reminders"
         is BrowseDestination.Tag -> "#${destination.name}"
         is BrowseDestination.Category ->
             if (selectedCategory != null) "${selectedCategory.emoji} ${selectedCategory.name}"
@@ -464,6 +502,7 @@ private fun DrillView(
     val subtitle = when (destination) {
         BrowseDestination.Favorites -> "Saves you marked with a heart"
         BrowseDestination.Archive -> "Everything you've tucked away"
+        BrowseDestination.Reminders -> "Upcoming nudges, sorted by time"
         is BrowseDestination.Tag -> "Saves carrying this tag"
         is BrowseDestination.Category -> if (showArchived) "Archived saves" else null
         else -> null
@@ -472,6 +511,7 @@ private fun DrillView(
     val accent: Color = when (destination) {
         BrowseDestination.Favorites -> Color(0xFFE85A6E)
         BrowseDestination.Archive -> Color(0xFF8B7355)
+        BrowseDestination.Reminders -> Color(0xFF2F9B8F)
         is BrowseDestination.Tag -> Color(0xFF5B7BC9)
         is BrowseDestination.Category -> selectedCategory?.let { Color(it.colorHex) } ?: defaultAccent
         else -> defaultAccent
@@ -516,8 +556,29 @@ private fun DrillView(
     )
 
     val items = drillItems.collectAsLazyPagingItems()
+    val selectedVisibleItems = (0 until items.itemCount)
+        .mapNotNull { idx -> items.peek(idx) }
+        .filter { it.id in selectedIds }
     val isEmpty = items.itemCount == 0 &&
         items.loadState.refresh is androidx.paging.LoadState.NotLoading
+
+    if (showBulkDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteConfirm = false },
+            title = { Text("Delete ${selectedVisibleItems.size} selected?") },
+            text = { Text("This is permanent. Archive keeps saves searchable if you may need them later.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBulkDeleteConfirm = false
+                    onDeleteSelected(selectedVisibleItems)
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
 
     if (isEmpty) {
         val (emoji, headline, body) = when (destination) {
@@ -530,6 +591,11 @@ private fun DrillView(
                 "🗃",
                 "Nothing archived",
                 "Archive a save (long-press → archive) to tuck it away without deleting it."
+            )
+            BrowseDestination.Reminders -> Triple(
+                "⏰",
+                "No reminders waiting",
+                "Set a reminder from a save card or the save sheet, and upcoming nudges will gather here."
             )
             is BrowseDestination.Tag -> Triple(
                 "🏷",
@@ -554,6 +620,21 @@ private fun DrillView(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
+        item(span = StaggeredGridItemSpan.FullLine) {
+            Column {
+                SortStrip(selected = sort, onSelect = onSort)
+                if (selectedIds.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    BulkActionBar(
+                        count = selectedIds.size,
+                        onClear = onClearSelection,
+                        onArchive = { onArchiveSelected(selectedVisibleItems) },
+                        onDelete = { showBulkDeleteConfirm = true }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
         items(
             count = items.itemCount,
             key = { idx -> items.peek(idx)?.id ?: idx }
@@ -566,14 +647,96 @@ private fun DrillView(
             // destination accent.
             val perItemCategory = item.categoryId?.let { categoriesById[it] }
             val perItemAccent = perItemCategory?.let { Color(it.colorHex) } ?: accent
-            SaveCard(
-                item = item,
-                accent = perItemAccent,
-                categoryEmoji = perItemCategory?.emoji,
-                categoryName = perItemCategory?.name,
-                onClick = { onOpenItem(item.id) },
-                onLongClick = { onLongPressItem(item) }
-            )
+            Box {
+                SaveCard(
+                    item = item,
+                    accent = perItemAccent,
+                    categoryEmoji = perItemCategory?.emoji,
+                    categoryName = perItemCategory?.name,
+                    onClick = {
+                        if (selectedIds.isNotEmpty()) onToggleSelect(item) else onOpenItem(item.id)
+                    },
+                    onLongClick = {
+                        if (selectedIds.isNotEmpty()) onToggleSelect(item) else onToggleSelect(item)
+                    }
+                )
+                if (item.id in selectedIds) {
+                    Icon(
+                        Icons.Rounded.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(28.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SortStrip(selected: BrowseSort, onSelect: (BrowseSort) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(BrowseSort.entries, key = { it.name }) { sort ->
+            val active = selected == sort
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.surface
+                    )
+                    .border(
+                        1.dp,
+                        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onSelect(sort) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    sort.label,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BulkActionBar(
+    count: Int,
+    onClear: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        IconButton(onClick = onClear) {
+            Icon(Icons.Rounded.Close, contentDescription = "Clear selection")
+        }
+        Text(
+            "$count selected",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onArchive) { Text("Archive") }
+        TextButton(onClick = onDelete) {
+            Text("Delete", color = MaterialTheme.colorScheme.error)
         }
     }
 }

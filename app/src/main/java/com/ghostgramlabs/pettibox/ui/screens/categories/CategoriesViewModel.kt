@@ -44,12 +44,14 @@ sealed interface BrowseDestination {
     data class Category(val id: String) : BrowseDestination
     data object Favorites : BrowseDestination
     data object Archive : BrowseDestination
+    data object Reminders : BrowseDestination
     data object TagList : BrowseDestination
     data class Tag(val name: String) : BrowseDestination
 
     companion object {
         const val CID_FAVORITES = "__fav"
         const val CID_ARCHIVE = "__arc"
+        const val CID_REMINDERS = "__rem"
         const val CID_TAG_LIST = "__tags"
         const val CID_TAG_PREFIX = "__tag:"
 
@@ -57,6 +59,7 @@ sealed interface BrowseDestination {
             cid.isNullOrBlank() -> Grid
             cid == CID_FAVORITES -> Favorites
             cid == CID_ARCHIVE -> Archive
+            cid == CID_REMINDERS -> Reminders
             cid == CID_TAG_LIST -> TagList
             cid.startsWith(CID_TAG_PREFIX) -> Tag(cid.removePrefix(CID_TAG_PREFIX))
             else -> Category(cid)
@@ -66,11 +69,19 @@ sealed interface BrowseDestination {
             Grid -> ""
             Favorites -> CID_FAVORITES
             Archive -> CID_ARCHIVE
+            Reminders -> CID_REMINDERS
             TagList -> CID_TAG_LIST
             is Category -> dest.id
             is Tag -> CID_TAG_PREFIX + dest.name
         }
     }
+}
+
+enum class BrowseSort(val label: String) {
+    NEWEST("Newest"),
+    OLDEST("Oldest"),
+    UPDATED("Recently edited"),
+    REMINDER("Reminder time")
 }
 
 data class CategoriesState(
@@ -79,9 +90,11 @@ data class CategoriesState(
     val countsByCategory: Map<String, Int> = emptyMap(),
     val favoriteCount: Int = 0,
     val archivedCount: Int = 0,
+    val reminderCount: Int = 0,
     val topTags: List<TagWithCount> = emptyList(),
     /** Toggle inside a Category drill — show archived items of that one collection. */
-    val showArchived: Boolean = false
+    val showArchived: Boolean = false,
+    val sort: BrowseSort = BrowseSort.NEWEST
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -96,6 +109,7 @@ class CategoriesViewModel @Inject constructor(
         BrowseDestination.fromCid(handle.get<String>("cid"))
     )
     private val _showArchived = MutableStateFlow(false)
+    private val _sort = MutableStateFlow(BrowseSort.NEWEST)
 
     val state: StateFlow<CategoriesState> = combine(
         _destination,
@@ -103,23 +117,27 @@ class CategoriesViewModel @Inject constructor(
         repo.observeCategoryCounts(),
         repo.observeFavoriteTotal(),
         repo.observeArchivedTotal(),
+        repo.observeUpcomingReminderTotal(),
         repo.observeTopTags(limit = 100),
-        _showArchived
+        _showArchived,
+        _sort
     ) { args ->
         @Suppress("UNCHECKED_CAST")
         val cats = args[1] as List<CategoryEntity>
         @Suppress("UNCHECKED_CAST")
         val counts = args[2] as List<com.ghostgramlabs.pettibox.data.local.CategoryCount>
         @Suppress("UNCHECKED_CAST")
-        val topTags = args[5] as List<TagWithCount>
+        val topTags = args[6] as List<TagWithCount>
         CategoriesState(
             destination = args[0] as BrowseDestination,
             categories = cats,
             countsByCategory = counts.associate { it.categoryId to it.count },
             favoriteCount = args[3] as Int,
             archivedCount = args[4] as Int,
+            reminderCount = args[5] as Int,
             topTags = topTags,
-            showArchived = args[6] as Boolean
+            showArchived = args[7] as Boolean,
+            sort = args[8] as BrowseSort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CategoriesState())
 
@@ -129,16 +147,18 @@ class CategoriesViewModel @Inject constructor(
      * of paging items — empty PagingData for that branch is fine.
      */
     val drillItems: Flow<PagingData<SaveItemEntity>> =
-        combine(_destination, _showArchived) { d, archived -> d to archived }
-            .flatMapLatest { (dest, archived) ->
+        combine(_destination, _showArchived, _sort) { d, archived, sort ->
+            Triple(d, archived, sort)
+        }.flatMapLatest { (dest, archived, sort) ->
                 val source: () -> androidx.paging.PagingSource<Int, SaveItemEntity> = when (dest) {
                     BrowseDestination.Grid -> return@flatMapLatest flowOf(PagingData.empty())
                     BrowseDestination.TagList -> return@flatMapLatest flowOf(PagingData.empty())
-                    BrowseDestination.Favorites -> ({ repo.pagedFavorites() })
-                    BrowseDestination.Archive -> ({ repo.pagedArchived() })
+                    BrowseDestination.Favorites -> ({ repo.pagedFavorites(sort.name) })
+                    BrowseDestination.Archive -> ({ repo.pagedArchived(sort.name) })
+                    BrowseDestination.Reminders -> ({ repo.pagedUpcomingReminders(sort.name) })
                     is BrowseDestination.Category ->
-                        ({ repo.pagedByCategory(dest.id, includeArchived = archived) })
-                    is BrowseDestination.Tag -> ({ repo.pagedByTag(dest.name) })
+                        ({ repo.pagedByCategory(dest.id, includeArchived = archived, sort = sort.name) })
+                    is BrowseDestination.Tag -> ({ repo.pagedByTag(dest.name, sort.name) })
                 }
                 Pager(
                     config = PagingConfig(
@@ -156,6 +176,7 @@ class CategoriesViewModel @Inject constructor(
         // Reset the per-collection archive toggle whenever we move; it
         // never makes sense outside a single category drill.
         _showArchived.value = false
+        _sort.value = if (dest == BrowseDestination.Reminders) BrowseSort.REMINDER else BrowseSort.NEWEST
     }
 
     /** Convenience for backwards-compatible call sites. */
@@ -165,6 +186,10 @@ class CategoriesViewModel @Inject constructor(
 
     fun toggleArchivedView() {
         _showArchived.value = !_showArchived.value
+    }
+
+    fun setSort(sort: BrowseSort) {
+        _sort.value = sort
     }
 
     fun deleteSelectedCategory() = viewModelScope.launch {
@@ -213,5 +238,22 @@ class CategoriesViewModel @Inject constructor(
     fun delete(item: SaveItemEntity) = viewModelScope.launch {
         ReminderScheduler.cancel(appContext, item.id)
         repo.delete(item.id)
+    }
+
+    fun archiveItems(items: List<SaveItemEntity>) = viewModelScope.launch {
+        items.forEach { item ->
+            repo.setArchived(item.id, true)
+            if (item.remindAt != null) {
+                repo.setRemindAt(item.id, null)
+                ReminderScheduler.cancel(appContext, item.id)
+            }
+        }
+    }
+
+    fun deleteItems(items: List<SaveItemEntity>) = viewModelScope.launch {
+        items.forEach { item ->
+            ReminderScheduler.cancel(appContext, item.id)
+            repo.delete(item.id)
+        }
     }
 }

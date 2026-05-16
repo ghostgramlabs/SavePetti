@@ -82,19 +82,31 @@ interface SaveDao {
         """
         SELECT * FROM save_items
         WHERE category_id = :categoryId AND is_archived = :includeArchived
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY is_pinned DESC,
+            CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
+            CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
+            created_at DESC
         """
     )
-    fun pagedByCategory(categoryId: String, includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity>
+    fun pagedByCategory(
+        categoryId: String,
+        includeArchived: Boolean = false,
+        sort: String = "NEWEST"
+    ): PagingSource<Int, SaveItemEntity>
 
     @Query(
         """
         SELECT * FROM save_items
         WHERE is_archived = :includeArchived
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY is_pinned DESC,
+            CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
+            CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
+            created_at DESC
         """
     )
-    fun pagedAll(includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity>
+    fun pagedAll(includeArchived: Boolean = false, sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity>
 
     @Query(
         """
@@ -110,10 +122,14 @@ interface SaveDao {
         """
         SELECT * FROM save_items
         WHERE is_favorite = 1 AND is_archived = 0
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY is_pinned DESC,
+            CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
+            CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
+            created_at DESC
         """
     )
-    fun pagedFavorites(): PagingSource<Int, SaveItemEntity>
+    fun pagedFavorites(sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity>
 
     /**
      * Every archived save across all collections. Crucially this does not
@@ -126,10 +142,14 @@ interface SaveDao {
         """
         SELECT * FROM save_items
         WHERE is_archived = 1
-        ORDER BY updated_at DESC
+        ORDER BY
+            CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
+            CASE WHEN :sort = 'NEWEST' THEN created_at END DESC,
+            CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
+            updated_at DESC
         """
     )
-    fun pagedArchived(): PagingSource<Int, SaveItemEntity>
+    fun pagedArchived(sort: String = "UPDATED"): PagingSource<Int, SaveItemEntity>
 
     /** Live saves carrying a given tag (case-insensitive). */
     @Query(
@@ -138,10 +158,30 @@ interface SaveDao {
         JOIN item_tags it ON it.item_id = s.id
         JOIN tags t ON t.id = it.tag_id
         WHERE t.name = :name COLLATE NOCASE AND s.is_archived = 0
-        ORDER BY s.is_pinned DESC, s.created_at DESC
+        ORDER BY s.is_pinned DESC,
+            CASE WHEN :sort = 'OLDEST' THEN s.created_at END ASC,
+            CASE WHEN :sort = 'UPDATED' THEN s.updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' THEN s.remind_at END ASC,
+            s.created_at DESC
         """
     )
-    fun pagedByTag(name: String): PagingSource<Int, SaveItemEntity>
+    fun pagedByTag(name: String, sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity>
+
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE remind_at IS NOT NULL AND remind_at > :now AND is_archived = 0
+        ORDER BY
+            CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
+            CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'NEWEST' THEN created_at END DESC,
+            remind_at ASC
+        """
+    )
+    fun pagedUpcomingReminders(
+        now: Long = System.currentTimeMillis(),
+        sort: String = "REMINDER"
+    ): PagingSource<Int, SaveItemEntity>
 
     // ── Aggregate queries: avoid loading rows just to count ───────────────
     // Counts also exclude archived so the user's home dashboard reflects
@@ -180,6 +220,9 @@ interface SaveDao {
     fun observeFavoriteTotal(): Flow<Int>
 
     // ── Reminders ─────────────────────────────────────────────────────────
+
+    @Query("SELECT COUNT(*) FROM save_items WHERE remind_at IS NOT NULL AND remind_at > :now AND is_archived = 0")
+    fun observeUpcomingReminderTotal(now: Long = System.currentTimeMillis()): Flow<Int>
 
     @Query("SELECT * FROM save_items WHERE remind_at IS NOT NULL AND remind_at <= :now AND is_archived = 0 ORDER BY remind_at ASC")
     suspend fun dueReminders(now: Long = System.currentTimeMillis()): List<SaveItemEntity>

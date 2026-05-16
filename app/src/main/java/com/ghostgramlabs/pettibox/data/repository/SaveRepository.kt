@@ -98,21 +98,26 @@ class SaveRepository @Inject constructor(
     suspend fun browseForSearch(): List<SaveItemEntity> = saveDao.browseForSearch()
 
     // Paged browses for large lists.
-    fun pagedAll(includeArchived: Boolean = false): PagingSource<Int, SaveItemEntity> =
-        saveDao.pagedAll(includeArchived)
+    fun pagedAll(includeArchived: Boolean = false, sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity> =
+        saveDao.pagedAll(includeArchived, sort)
     fun pagedByCategory(
         categoryId: String,
-        includeArchived: Boolean = false
+        includeArchived: Boolean = false,
+        sort: String = "NEWEST"
     ): PagingSource<Int, SaveItemEntity> =
-        saveDao.pagedByCategory(categoryId, includeArchived)
+        saveDao.pagedByCategory(categoryId, includeArchived, sort)
     fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity> =
         saveDao.pagedBySource(sourceApp)
 
-    fun pagedFavorites(): PagingSource<Int, SaveItemEntity> = saveDao.pagedFavorites()
+    fun pagedFavorites(sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity> = saveDao.pagedFavorites(sort)
 
-    fun pagedArchived(): PagingSource<Int, SaveItemEntity> = saveDao.pagedArchived()
+    fun pagedArchived(sort: String = "UPDATED"): PagingSource<Int, SaveItemEntity> = saveDao.pagedArchived(sort)
 
-    fun pagedByTag(name: String): PagingSource<Int, SaveItemEntity> = saveDao.pagedByTag(name)
+    fun pagedByTag(name: String, sort: String = "NEWEST"): PagingSource<Int, SaveItemEntity> =
+        saveDao.pagedByTag(name, sort)
+
+    fun pagedUpcomingReminders(sort: String = "REMINDER"): PagingSource<Int, SaveItemEntity> =
+        saveDao.pagedUpcomingReminders(sort = sort)
 
     // Aggregates — never load full rows just to count.
     fun observeSourceCounts(): Flow<List<SourceCount>> = saveDao.observeSourceCounts()
@@ -120,6 +125,7 @@ class SaveRepository @Inject constructor(
     fun observeTotal(): Flow<Int> = saveDao.observeTotal()
     fun observeArchivedTotal(): Flow<Int> = saveDao.observeArchivedTotal()
     fun observeFavoriteTotal(): Flow<Int> = saveDao.observeFavoriteTotal()
+    fun observeUpcomingReminderTotal(): Flow<Int> = saveDao.observeUpcomingReminderTotal()
 
     suspend fun setFavorite(id: Long, fav: Boolean) = saveDao.setFavorite(id, fav)
     suspend fun setPinned(id: Long, pin: Boolean) = saveDao.setPinned(id, pin)

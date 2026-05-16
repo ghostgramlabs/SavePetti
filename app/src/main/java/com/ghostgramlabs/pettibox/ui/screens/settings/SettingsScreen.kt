@@ -43,6 +43,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -105,6 +106,7 @@ fun SettingsScreen(
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
     var showCreateCollection by remember { mutableStateOf(false) }
     var showHelpDetails by remember { mutableStateOf(false) }
+    var busyLabel by remember { mutableStateOf<String?>(null) }
     if (showCreateCollection) {
         CreateCollectionDialog(
             onCreate = { newCollection ->
@@ -136,6 +138,7 @@ fun SettingsScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
+                busyLabel = "Importing backup"
                 runCatching { viewModel.importBackupUri(uri) }
                     .onSuccess { result ->
                         snackbarHostState.showSnackbar(
@@ -145,6 +148,7 @@ fun SettingsScreen(
                     .onFailure {
                         snackbarHostState.showSnackbar("That backup file couldn't be imported")
                     }
+                busyLabel = null
             }
         }
     }
@@ -180,6 +184,10 @@ fun SettingsScreen(
             // Inset the rest of the page so it lines up with section gutters
             // while still letting ScreenHeading own its own padding above.
             Column(Modifier.padding(horizontal = 20.dp)) {
+            if (busyLabel != null) {
+                WorkInProgressBanner(label = busyLabel!!)
+                Spacer(Modifier.height(12.dp))
+            }
             SettingsSection(title = "Appearance") {
                 ThemeChoice(
                     mode = ThemeMode.SYSTEM,
@@ -229,7 +237,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "Applies to new saves only. Turn it off to save files without extracting text.",
+                            "Applies to new saves only. English text works best; other languages may be partial.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -251,11 +259,16 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         scope.launch {
-                            val count = viewModel.scanExistingSaves()
-                            snackbarHostState.showSnackbar(
-                                if (count == 0) "No older images or PDFs need scanning"
-                                else "Scanning existing saves for search: queued $count item${if (count == 1) "" else "s"}"
-                            )
+                            busyLabel = "Queueing text scan"
+                            runCatching { viewModel.scanExistingSaves() }
+                                .onSuccess { count ->
+                                    snackbarHostState.showSnackbar(
+                                        if (count == 0) "No older images or PDFs need scanning"
+                                        else "Scanning existing saves for search: queued $count item${if (count == 1) "" else "s"}"
+                                    )
+                                }
+                                .onFailure { snackbarHostState.showSnackbar("Couldn't queue text scan") }
+                            busyLabel = null
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -327,7 +340,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Find it later",
-                    body = "Search looks through titles, notes, tags, sources, links, and text found inside images or PDFs.",
+                    body = "Search looks through titles, notes, tags, sources, links, and text found inside images or PDFs. Text recognition is most reliable for English.",
                     icon = Icons.Rounded.Search
                 )
                 HelpItem(
@@ -365,7 +378,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Text recognition is optional",
-                    body = "Auto-scan makes screenshots and PDFs searchable. Large PDFs are indexed for the first 30 pages to keep the app fast.",
+                    body = "Auto-scan makes English screenshots and PDFs searchable. Other languages may be partial. Large PDFs are indexed for the first 30 pages to keep the app fast.",
                     icon = Icons.AutoMirrored.Rounded.TextSnippet
                 )
 
@@ -502,6 +515,7 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         scope.launch {
+                            busyLabel = "Backing up now"
                             runCatching { viewModel.createLocalBackupNow() }
                                 .onSuccess { (_, result) ->
                                     snackbarHostState.showSnackbar(
@@ -511,6 +525,7 @@ fun SettingsScreen(
                                 .onFailure {
                                     snackbarHostState.showSnackbar("Couldn't create local backup")
                                 }
+                            busyLabel = null
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -524,6 +539,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         scope.launch {
+                            busyLabel = "Preparing export"
                             runCatching { viewModel.exportBackupZipFile() }
                                 .onSuccess { (file, result) ->
                                     if (!shareBackupFile(ctx, file)) {
@@ -537,6 +553,7 @@ fun SettingsScreen(
                                 .onFailure {
                                     snackbarHostState.showSnackbar("Couldn't export backup")
                                 }
+                            busyLabel = null
                         }
                     },
                     shape = RoundedCornerShape(12.dp),
@@ -591,6 +608,30 @@ private fun SettingsSection(
 }
 
 @Composable
+private fun WorkInProgressBanner(label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
 private fun HelpFlow() {
     Column(
         Modifier
@@ -608,7 +649,7 @@ private fun HelpFlow() {
         HelpStep(number = "1", title = "Tap Share", body = "Use the Share button in the app where you found something.")
         HelpStep(number = "2", title = "Choose PettiBox", body = "PettiBox appears in Android's share menu for links, text, images, PDFs, and files.")
         HelpStep(number = "3", title = "Pick a collection", body = "Tap a collection chip, add any note or reminder, then save.")
-        HelpStep(number = "4", title = "Search later", body = "Find it by title, note, tag, source, link, or text inside images and PDFs.")
+        HelpStep(number = "4", title = "Search later", body = "Find it by title, note, tag, source, link, or English text inside images and PDFs.")
     }
 }
 

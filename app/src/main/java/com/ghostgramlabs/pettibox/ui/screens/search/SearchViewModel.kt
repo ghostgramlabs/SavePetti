@@ -33,8 +33,17 @@ data class SearchState(
     val tagFilter: String? = null,
     val results: List<SaveItemEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
-    val knownTags: List<String> = emptyList()
+    val knownTags: List<String> = emptyList(),
+    val sort: SearchSort = SearchSort.RELEVANT
 )
+
+enum class SearchSort(val label: String) {
+    RELEVANT("Relevant"),
+    NEWEST("Newest"),
+    OLDEST("Oldest"),
+    UPDATED("Recently edited"),
+    REMINDER("Reminder time")
+}
 
 private data class Filters(
     val source: String?,
@@ -56,6 +65,7 @@ class SearchViewModel @Inject constructor(
     private val _categoryFilter = MutableStateFlow<String?>(null)
     private val _typeFilter = MutableStateFlow<ContentType?>(null)
     private val _tagFilter = MutableStateFlow<String?>(null)
+    private val _sort = MutableStateFlow(SearchSort.RELEVANT)
 
     private val filters = combine(
         _sourceFilter, _categoryFilter, _typeFilter, _tagFilter
@@ -97,7 +107,7 @@ class SearchViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val state: StateFlow<SearchState> = combine(
-        _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet
+        _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet, _sort
     ) { args ->
         // See HomeViewModel: combine(vararg) erases types through Array<Any?>
         // and each cast emits its own warning. Suppress per-line.
@@ -111,12 +121,24 @@ class SearchViewModel @Inject constructor(
         val tags = args[4] as List<String>
         @Suppress("UNCHECKED_CAST")
         val tagIds = args[5] as Set<Long>?
+        val sort = args[6] as SearchSort
 
         val filtered = candidates.filter { item ->
             (f.source == null || item.sourceApp == f.source) &&
                 (f.category == null || item.categoryId == f.category) &&
                 (f.type == null || item.contentType == f.type.name) &&
                 (tagIds == null || item.id in tagIds)
+        }.let { list ->
+            when (sort) {
+                SearchSort.RELEVANT -> list
+                SearchSort.NEWEST -> list.sortedByDescending { it.createdAt }
+                SearchSort.OLDEST -> list.sortedBy { it.createdAt }
+                SearchSort.UPDATED -> list.sortedByDescending { it.updatedAt }
+                SearchSort.REMINDER -> list.sortedWith(
+                    compareBy<SaveItemEntity> { it.remindAt ?: Long.MAX_VALUE }
+                        .thenByDescending { it.createdAt }
+                )
+            }
         }
         SearchState(
             query = q,
@@ -126,7 +148,8 @@ class SearchViewModel @Inject constructor(
             tagFilter = f.tag,
             results = filtered,
             categories = cats,
-            knownTags = tags
+            knownTags = tags,
+            sort = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchState())
 
@@ -148,6 +171,10 @@ class SearchViewModel @Inject constructor(
         _categoryFilter.value = null
         _typeFilter.value = null
         _tagFilter.value = null
+    }
+
+    fun setSort(sort: SearchSort) {
+        _sort.value = sort
     }
 
     // ── Quick actions (long-press) ───────────────────────────────────────
