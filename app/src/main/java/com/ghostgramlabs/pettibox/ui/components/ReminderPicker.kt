@@ -1,6 +1,7 @@
 package com.ghostgramlabs.pettibox.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,19 +15,20 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -42,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
@@ -66,13 +70,6 @@ enum class ReminderPreset(val label: String) {
 /**
  * Returns the wall-clock millis for a preset, or null for CUSTOM (caller
  * shows the picker).
- *
- * Heuristics chosen to match user intent rather than literal interpretation:
- *  - Tonight: 9 PM today, or 9 PM tomorrow if it's already past 9 PM
- *  - Tomorrow: 9 AM tomorrow
- *  - Weekend: 10 AM on the next Saturday (or today if it IS Saturday and
- *    before 10 AM)
- *  - Next week: 9 AM 7 days from now
  */
 fun ReminderPreset.toEpochMillis(now: Long = System.currentTimeMillis()): Long? {
     if (this == ReminderPreset.CUSTOM) return null
@@ -138,11 +135,33 @@ fun formatReminderAt(epochMillis: Long, now: Long = System.currentTimeMillis()):
     }
 }
 
+private fun formatDateOnly(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
+    val cal = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    val nowCal = Calendar.getInstance().apply { timeInMillis = now }
+    val tomorrowCal = (nowCal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
+    val sameDay = cal.get(Calendar.YEAR) == nowCal.get(Calendar.YEAR) &&
+        cal.get(Calendar.DAY_OF_YEAR) == nowCal.get(Calendar.DAY_OF_YEAR)
+    val isTomorrow = cal.get(Calendar.YEAR) == tomorrowCal.get(Calendar.YEAR) &&
+        cal.get(Calendar.DAY_OF_YEAR) == tomorrowCal.get(Calendar.DAY_OF_YEAR)
+    return when {
+        sameDay -> "Today"
+        isTomorrow -> "Tomorrow"
+        else -> SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(epochMillis))
+    }
+}
+
+private fun formatTimeOnly(hour: Int, minute: Int): String {
+    val cal = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+    }
+    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(cal.time)
+}
+
 /**
- * Bottom sheet that offers the five preset reminder times plus a
- * "Custom…" entry. Caller is responsible for showing the custom time
- * picker on CUSTOM if they want fine control — most users land on a
- * preset and never need it.
+ * Bottom sheet that offers the four preset reminder times plus a
+ * "Custom…" entry. Each row taps through directly to a one-tap save,
+ * with haptic confirmation; the Custom row routes to a separate sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,6 +172,7 @@ fun ReminderPickerSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val haptics = LocalHapticFeedback.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -179,22 +199,28 @@ fun ReminderPickerSheet(
             Spacer(Modifier.height(12.dp))
             ReminderPreset.entries.forEach { preset ->
                 val previewMillis = remember(preset) { preset.toEpochMillis() }
+                val isCustom = preset == ReminderPreset.CUSTOM
                 ReminderRow(
                     label = preset.label,
                     subtitle = previewMillis?.let { formatReminderAt(it) } ?: "Choose a date & time",
+                    isCustom = isCustom,
                     onClick = {
-                        if (preset == ReminderPreset.CUSTOM) onCustom()
-                        else onPick(previewMillis)
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (isCustom) onCustom() else onPick(previewMillis)
                     }
                 )
             }
             if (currentRemindAt != null) {
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { onPick(null) }) {
+                TextButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onPick(null)
+                }) {
                     Text("Clear reminder", color = MaterialTheme.colorScheme.error)
                 }
             }
             Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.navigationBarsPadding())
         }
     }
 }
@@ -203,25 +229,38 @@ fun ReminderPickerSheet(
 private fun ReminderRow(
     label: String,
     subtitle: String,
+    isCustom: Boolean,
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 12.dp)
-    ) {
+    // Custom row reads as a "go somewhere" affordance (dashed outline +
+    // chevron) so it's visually distinct from the one-tap presets. Without
+    // this the row looks identical to "Tonight" / "Tomorrow" but behaves
+    // differently — opens another sheet instead of saving — which is
+    // exactly the kind of mismatch that makes the picker feel buggy.
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 3.dp)
+        .clip(RoundedCornerShape(14.dp))
+        .then(
+            if (isCustom) Modifier.border(
+                1.dp,
+                scheme.outline,
+                RoundedCornerShape(14.dp)
+            ) else Modifier
+        )
+        .clickable(onClick = onClick)
+        .padding(horizontal = 10.dp, vertical = 12.dp)
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = rowModifier) {
         Icon(
-            Icons.Rounded.AccessTime,
+            if (isCustom) Icons.Rounded.CalendarMonth else Icons.Rounded.AccessTime,
             contentDescription = null,
             tint = scheme.primary,
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
             Text(
                 label,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -233,31 +272,28 @@ private fun ReminderRow(
                 color = scheme.onSurfaceVariant
             )
         }
+        if (isCustom) {
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
 /**
- * Bottom sheet for picking an arbitrary date + time as a reminder.
+ * Custom reminder picker. Date and Time live on the SAME screen as two
+ * tappable rows — not separate tabs — so the user cannot tap "Set" while
+ * the Time row is still on a silent default.
  *
- * Replaces the prior ReminderCustomDialog which crammed a TimePicker
- * on top of a 4-chip "Day" row in an AlertDialog — the day picker was
- * tiny and hidden, and there was no preview of when the reminder would
- * actually fire. The new sheet:
- *
- *  - Shows a live "We'll nudge you Thu, May 14 · 9:00 PM" preview at
- *    the top, in the primary color, that updates as the user changes
- *    either tab.
- *  - Splits Date and Time into proper tabs so each picker gets the
- *    full sheet width instead of fighting for space.
- *  - Uses Material3 [DatePicker] (full calendar grid, any future date)
- *    instead of the four hardcoded day chips.
- *  - Disables the Set button until the combined timestamp is in the
- *    future, so the user can't accidentally schedule a reminder for
- *    five minutes ago.
- *
- * Date/time combination is timezone-correct: DatePicker returns UTC
- * midnight of the picked day, which we read in UTC and then re-construct
- * as a local-time Calendar at the picked hour and minute.
+ * The Time row starts in an explicitly **unset** state and announces it
+ * ("Tap to set") in the error color. "Set reminder" stays disabled until
+ * the user has explicitly opened the time picker and confirmed a time.
+ * This is the precise failure mode of the prior tabbed sheet: the user
+ * picked a date, hit Set, and the reminder fired at a default
+ * (current-hour + 1, minute 0) they never chose.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -265,24 +301,22 @@ fun ReminderCustomSheet(
     onConfirm: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val initial = remember {
+    val initialDate = remember {
         Calendar.getInstance().apply {
-            add(Calendar.HOUR_OF_DAY, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
     }
-    // DatePicker stores its selection in UTC midnight of the user's
-    // picked day — convert the LOCAL initial date to a UTC midnight of
-    // the same calendar day so the picker opens on "today" wherever the
-    // user is, not on yesterday for users east of UTC.
+    // DatePicker uses UTC midnight internally; pre-seed UTC midnight of
+    // the user's local "today" so the calendar opens on the right day.
     val initialUtcDay = remember {
         Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
             set(
-                initial.get(Calendar.YEAR),
-                initial.get(Calendar.MONTH),
-                initial.get(Calendar.DAY_OF_MONTH),
+                initialDate.get(Calendar.YEAR),
+                initialDate.get(Calendar.MONTH),
+                initialDate.get(Calendar.DAY_OF_MONTH),
                 0, 0, 0
             )
             set(Calendar.MILLISECOND, 0)
@@ -290,19 +324,26 @@ fun ReminderCustomSheet(
     }
 
     val dateState = rememberDatePickerState(initialSelectedDateMillis = initialUtcDay)
+    // Time picker initial values exist for the *picker UI* only — we
+    // gate "Set reminder" on whether the user has explicitly confirmed
+    // the time via [timeConfirmed], so the picker's initial state never
+    // silently leaks into the reminder.
+    val nowCal = remember { Calendar.getInstance() }
     val timeState = rememberTimePickerState(
-        initialHour = initial.get(Calendar.HOUR_OF_DAY),
-        initialMinute = initial.get(Calendar.MINUTE),
+        initialHour = nowCal.get(Calendar.HOUR_OF_DAY),
+        initialMinute = 0,
         is24Hour = false
     )
-    var tab by remember { mutableStateOf(0) }
+    var timeConfirmed by remember { mutableStateOf(false) }
+    var showDateDialog by remember { mutableStateOf(false) }
+    var showTimeDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val haptics = LocalHapticFeedback.current
 
     val combined: Long? by remember {
         derivedStateOf {
             val d = dateState.selectedDateMillis ?: return@derivedStateOf null
-            // Read the picked day's year/month/day in UTC, then build a
-            // local Calendar for the user's timezone at the picked hour.
+            if (!timeConfirmed) return@derivedStateOf null
             val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = d }
             Calendar.getInstance().apply {
                 set(
@@ -330,9 +371,9 @@ fun ReminderCustomSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 4.dp)
-                .heightIn(max = 720.dp)
+                .padding(horizontal = 20.dp)
+                .padding(top = 6.dp, bottom = 8.dp)
+                .heightIn(max = 560.dp)
         ) {
             Text(
                 "Custom reminder",
@@ -340,80 +381,218 @@ fun ReminderCustomSheet(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(4.dp))
-            // Live preview — updates as either tab changes. Primary
-            // color when valid, muted hint when in the past so the user
-            // notices before tapping Set.
-            Text(
-                when {
-                    combined == null -> "Pick a date and time"
-                    !isFuture -> "That time is already in the past — pick a future moment"
-                    else -> "We'll nudge you " + formatReminderAt(combined!!)
-                },
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (isFuture) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
-
-            SecondaryTabRow(
-                selectedTabIndex = tab,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.primary
-            ) {
-                Tab(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    text = { Text("Date", fontWeight = FontWeight.SemiBold) }
-                )
-                Tab(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
-                    text = { Text("Time", fontWeight = FontWeight.SemiBold) }
-                )
+            // Live preview — primary color when both fields are confirmed
+            // AND in the future. When the time is missing, the message is
+            // explicit so the user can't accidentally proceed.
+            val previewText = when {
+                !timeConfirmed -> "Pick a time below to enable Set"
+                combined == null -> "Pick a date and time"
+                !isFuture -> "That moment has already passed — pick a future time"
+                else -> "We'll nudge you " + formatReminderAt(combined!!)
             }
-
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 360.dp, max = 460.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(top = 4.dp)
-            ) {
-                when (tab) {
-                    0 -> DatePicker(
-                        state = dateState,
-                        modifier = Modifier.fillMaxWidth(),
-                        title = null,
-                        headline = null,
-                        showModeToggle = false
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!timeConfirmed || !isFuture) {
+                    Icon(
+                        Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp)
                     )
-                    else -> Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        TimePicker(state = timeState)
-                    }
+                    Spacer(Modifier.width(6.dp))
                 }
+                Text(
+                    previewText,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = when {
+                        !timeConfirmed -> MaterialTheme.colorScheme.error
+                        !isFuture -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+                )
             }
+            Spacer(Modifier.height(16.dp))
 
+            FieldRow(
+                icon = Icons.Rounded.CalendarMonth,
+                label = "Date",
+                value = dateState.selectedDateMillis?.let {
+                    // Display the picked day in the user's local calendar.
+                    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                        timeInMillis = it
+                    }
+                    val localShown = Calendar.getInstance().apply {
+                        set(
+                            utc.get(Calendar.YEAR),
+                            utc.get(Calendar.MONTH),
+                            utc.get(Calendar.DAY_OF_MONTH),
+                            0, 0, 0
+                        )
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    formatDateOnly(localShown.timeInMillis)
+                } ?: "Tap to pick",
+                placeholderMissing = false,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showDateDialog = true
+                }
+            )
+            Spacer(Modifier.height(10.dp))
+            FieldRow(
+                icon = Icons.Rounded.AccessTime,
+                label = "Time",
+                value = if (timeConfirmed) formatTimeOnly(timeState.hour, timeState.minute)
+                    else "Tap to set",
+                placeholderMissing = !timeConfirmed,
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showTimeDialog = true
+                }
+            )
+
+            Spacer(Modifier.height(20.dp))
             Row(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    enabled = isFuture,
-                    onClick = { combined?.let(onConfirm) },
+                    enabled = timeConfirmed && isFuture,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        combined?.let(onConfirm)
+                    },
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Set reminder", fontWeight = FontWeight.Bold) }
             }
             Spacer(Modifier.navigationBarsPadding())
         }
+    }
+
+    if (showDateDialog) {
+        DatePickerDialog(
+            onDismissRequest = { showDateDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showDateDialog = false }) { Text("Done") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDateDialog = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = dateState, showModeToggle = false)
+        }
+    }
+
+    if (showTimeDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showTimeDialog = false },
+            containerColor = MaterialTheme.colorScheme.background,
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 8.dp, bottom = 8.dp)
+            ) {
+                Text(
+                    "Pick a time",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
+                )
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TimePicker(state = timeState)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = { showTimeDialog = false }) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            timeConfirmed = true
+                            showTimeDialog = false
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Set time", fontWeight = FontWeight.Bold) }
+                }
+                Spacer(Modifier.navigationBarsPadding())
+            }
+        }
+    }
+}
+
+/**
+ * One of the two stacked rows in the custom-reminder sheet. Renders the
+ * field's current value as a big tappable target so it reads as "this is
+ * what's selected" rather than "tap this control." When the field is
+ * still in its unset state, the value flips to the error color — the
+ * single most important affordance, because the prior version let the
+ * user proceed without ever noticing the time was on a silent default.
+ */
+@Composable
+private fun FieldRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    placeholderMissing: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val borderColor = if (placeholderMissing) scheme.error else scheme.outline
+    val valueColor = if (placeholderMissing) scheme.error else scheme.onSurface
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                if (placeholderMissing) 1.5.dp else 1.dp,
+                borderColor,
+                RoundedCornerShape(14.dp)
+            )
+            .background(scheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp)
+    ) {
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(scheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon, contentDescription = null,
+                tint = scheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = valueColor
+            )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

@@ -10,7 +10,8 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
-import com.ghostgramlabs.pettibox.data.reminders.ReminderWorker
+import com.ghostgramlabs.pettibox.data.local.TagWithCount
+import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,10 +27,60 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * A first-class place to land on inside Browse. Categories are the obvious
+ * one, but Favorites, Archive, and Tag-based filters are equally valid
+ * "saved-from-anywhere" destinations and were previously unreachable from
+ * Browse — Favorites only lived on Home, archived items were only visible
+ * via the per-collection toggle (so orphan archived items were invisible),
+ * and tags had no entry point at all.
+ *
+ * Wire-format on the cid nav arg uses prefixed sentinels so [String] route
+ * args still work without changing the NavGraph. Category ids are
+ * user-controlled but never collide with the `__` prefix.
+ */
+sealed interface BrowseDestination {
+    data object Grid : BrowseDestination
+    data class Category(val id: String) : BrowseDestination
+    data object Favorites : BrowseDestination
+    data object Archive : BrowseDestination
+    data object TagList : BrowseDestination
+    data class Tag(val name: String) : BrowseDestination
+
+    companion object {
+        const val CID_FAVORITES = "__fav"
+        const val CID_ARCHIVE = "__arc"
+        const val CID_TAG_LIST = "__tags"
+        const val CID_TAG_PREFIX = "__tag:"
+
+        fun fromCid(cid: String?): BrowseDestination = when {
+            cid.isNullOrBlank() -> Grid
+            cid == CID_FAVORITES -> Favorites
+            cid == CID_ARCHIVE -> Archive
+            cid == CID_TAG_LIST -> TagList
+            cid.startsWith(CID_TAG_PREFIX) -> Tag(cid.removePrefix(CID_TAG_PREFIX))
+            else -> Category(cid)
+        }
+
+        fun toCid(dest: BrowseDestination): String = when (dest) {
+            Grid -> ""
+            Favorites -> CID_FAVORITES
+            Archive -> CID_ARCHIVE
+            TagList -> CID_TAG_LIST
+            is Category -> dest.id
+            is Tag -> CID_TAG_PREFIX + dest.name
+        }
+    }
+}
+
 data class CategoriesState(
-    val selectedId: String? = null,
+    val destination: BrowseDestination = BrowseDestination.Grid,
     val categories: List<CategoryEntity> = emptyList(),
     val countsByCategory: Map<String, Int> = emptyMap(),
+    val favoriteCount: Int = 0,
+    val archivedCount: Int = 0,
+    val topTags: List<TagWithCount> = emptyList(),
+    /** Toggle inside a Category drill — show archived items of that one collection. */
     val showArchived: Boolean = false
 )
 
@@ -41,48 +92,75 @@ class CategoriesViewModel @Inject constructor(
     handle: SavedStateHandle
 ) : ViewModel() {
 
-    private val _selected = MutableStateFlow(
-        handle.get<String>("cid")?.takeIf { it.isNotBlank() }
+    private val _destination = MutableStateFlow(
+        BrowseDestination.fromCid(handle.get<String>("cid"))
     )
     private val _showArchived = MutableStateFlow(false)
 
     val state: StateFlow<CategoriesState> = combine(
-        _selected, repo.observeCategories(), repo.observeCategoryCounts(), _showArchived
-    ) { sel, cats, counts, showArchived ->
+        _destination,
+        repo.observeCategories(),
+        repo.observeCategoryCounts(),
+        repo.observeFavoriteTotal(),
+        repo.observeArchivedTotal(),
+        repo.observeTopTags(limit = 100),
+        _showArchived
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
+        val cats = args[1] as List<CategoryEntity>
+        @Suppress("UNCHECKED_CAST")
+        val counts = args[2] as List<com.ghostgramlabs.pettibox.data.local.CategoryCount>
+        @Suppress("UNCHECKED_CAST")
+        val topTags = args[5] as List<TagWithCount>
         CategoriesState(
-            selectedId = sel,
+            destination = args[0] as BrowseDestination,
             categories = cats,
             countsByCategory = counts.associate { it.categoryId to it.count },
-            showArchived = showArchived
+            favoriteCount = args[3] as Int,
+            archivedCount = args[4] as Int,
+            topTags = topTags,
+            showArchived = args[6] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CategoriesState())
 
     /**
-     * Paged stream of items for the currently-drilled-into category.
-     * PagingSource is rebuilt whenever the selection OR the archived
-     * toggle changes; cachedIn keeps the active page window across
-     * recompositions.
+     * Paged stream of items for the current drill destination. The Tag
+     * list destination renders the tag *list* directly from state instead
+     * of paging items — empty PagingData for that branch is fine.
      */
     val drillItems: Flow<PagingData<SaveItemEntity>> =
-        combine(_selected, _showArchived) { id, archived -> id to archived }
-            .flatMapLatest { (id, archived) ->
-                if (id == null) flowOf(PagingData.empty())
-                else Pager(
+        combine(_destination, _showArchived) { d, archived -> d to archived }
+            .flatMapLatest { (dest, archived) ->
+                val source: () -> androidx.paging.PagingSource<Int, SaveItemEntity> = when (dest) {
+                    BrowseDestination.Grid -> return@flatMapLatest flowOf(PagingData.empty())
+                    BrowseDestination.TagList -> return@flatMapLatest flowOf(PagingData.empty())
+                    BrowseDestination.Favorites -> ({ repo.pagedFavorites() })
+                    BrowseDestination.Archive -> ({ repo.pagedArchived() })
+                    is BrowseDestination.Category ->
+                        ({ repo.pagedByCategory(dest.id, includeArchived = archived) })
+                    is BrowseDestination.Tag -> ({ repo.pagedByTag(dest.name) })
+                }
+                Pager(
                     config = PagingConfig(
                         pageSize = 30,
                         prefetchDistance = 10,
                         initialLoadSize = 60,
                         enablePlaceholders = false
                     ),
-                    pagingSourceFactory = { repo.pagedByCategory(id, includeArchived = archived) }
+                    pagingSourceFactory = source
                 ).flow
             }.cachedIn(viewModelScope)
 
-    fun select(id: String?) {
-        _selected.value = id
-        // Reset archived toggle when entering / leaving a collection so
-        // the user never lands on an "archived" view unexpectedly.
+    fun navigate(dest: BrowseDestination) {
+        _destination.value = dest
+        // Reset the per-collection archive toggle whenever we move; it
+        // never makes sense outside a single category drill.
         _showArchived.value = false
+    }
+
+    /** Convenience for backwards-compatible call sites. */
+    fun select(categoryId: String?) {
+        navigate(if (categoryId.isNullOrBlank()) BrowseDestination.Grid else BrowseDestination.Category(categoryId))
     }
 
     fun toggleArchivedView() {
@@ -90,16 +168,16 @@ class CategoriesViewModel @Inject constructor(
     }
 
     fun deleteSelectedCategory() = viewModelScope.launch {
-        val id = _selected.value ?: return@launch
-        val category = state.value.categories.firstOrNull { it.id == id } ?: return@launch
+        val dest = _destination.value as? BrowseDestination.Category ?: return@launch
+        val category = state.value.categories.firstOrNull { it.id == dest.id } ?: return@launch
         if (!category.userCreated) return@launch
-        repo.deleteCategory(id)
-        _selected.value = null
+        repo.deleteCategory(dest.id)
+        _destination.value = BrowseDestination.Grid
     }
 
     fun updateSelectedCategory(name: String, emoji: String, colorHex: Long) = viewModelScope.launch {
-        val id = _selected.value ?: return@launch
-        val category = state.value.categories.firstOrNull { it.id == id } ?: return@launch
+        val dest = _destination.value as? BrowseDestination.Category ?: return@launch
+        val category = state.value.categories.firstOrNull { it.id == dest.id } ?: return@launch
         if (!category.userCreated || name.isBlank()) return@launch
         repo.upsertCategory(
             category.copy(
@@ -121,19 +199,19 @@ class CategoriesViewModel @Inject constructor(
         repo.setArchived(item.id, !item.isArchived)
         if (!item.isArchived && item.remindAt != null) {
             repo.setRemindAt(item.id, null)
-            ReminderWorker.cancel(appContext, item.id)
+            ReminderScheduler.cancel(appContext, item.id)
         }
     }
     fun setRemindAt(item: SaveItemEntity, at: Long?) = viewModelScope.launch {
         repo.setRemindAt(item.id, at)
-        if (at != null) ReminderWorker.schedule(appContext, item.id, at)
-        else ReminderWorker.cancel(appContext, item.id)
+        if (at != null) ReminderScheduler.schedule(appContext, item.id, at)
+        else ReminderScheduler.cancel(appContext, item.id)
     }
     fun moveTo(item: SaveItemEntity, categoryId: String?) = viewModelScope.launch {
         repo.update(item.copy(categoryId = categoryId, updatedAt = System.currentTimeMillis()))
     }
     fun delete(item: SaveItemEntity) = viewModelScope.launch {
-        ReminderWorker.cancel(appContext, item.id)
+        ReminderScheduler.cancel(appContext, item.id)
         repo.delete(item.id)
     }
 }

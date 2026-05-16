@@ -5,6 +5,16 @@
     <!-- Reminders post a notification at the user's chosen time. Required
          declaration on Android 13+; users can still revoke at runtime. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- AlarmManager fires the wall-clock reminder. SCHEDULE_EXACT_ALARM
+         is granted by default through API 32 and gives the user the
+         option to grant on API 33+ via Settings; we degrade to inexact
+         (setAndAllowWhileIdle) at runtime when the permission isn't
+         granted, so the app keeps working either way. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Re-arm pending alarms on reboot. AlarmManager alarms do not
+         survive a reboot, so without this any reminder set before a
+         power cycle would silently fail to fire. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".PettiBoxApp"
@@ -86,5 +96,33 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- Reminder delivery. The receiver is private (exported=false)
+             because the alarm is fired by the OS into our own process;
+             no other app should be able to invoke it. -->
+        <receiver
+            android:name=".data.reminders.ReminderAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ghostgramlabs.pettibox.action.REMINDER_FIRE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-arms pending reminder alarms after a reboot, package
+             replacement, or clock/timezone change. Exported because the
+             system delivers the boot broadcast from outside our app. -->
+        <receiver
+            android:name=".data.reminders.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

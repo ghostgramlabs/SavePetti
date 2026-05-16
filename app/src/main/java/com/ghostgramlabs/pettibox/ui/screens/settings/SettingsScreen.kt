@@ -61,10 +61,15 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
+import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -94,6 +99,34 @@ fun SettingsScreen(
             lastCopyFailedAt = 0L
         )
     )
+    val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
+    var showCreateCollection by remember { mutableStateOf(false) }
+    if (showCreateCollection) {
+        CreateCollectionDialog(
+            onCreate = { newCollection ->
+                showCreateCollection = false
+                // Reject case-insensitive duplicates inline rather than
+                // silently writing two collections with the same name.
+                val duplicate = collections.any {
+                    it.name.equals(newCollection.name.trim(), ignoreCase = true)
+                }
+                if (duplicate) {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("A collection named \"${newCollection.name}\" already exists")
+                    }
+                    return@CreateCollectionDialog
+                }
+                viewModel.createCollection(newCollection) { created ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            "Created ${created.emoji} ${created.name}"
+                        )
+                    }
+                }
+            },
+            onDismiss = { showCreateCollection = false }
+        )
+    }
     val importBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -161,6 +194,14 @@ fun SettingsScreen(
                     icon = Icons.Rounded.DarkMode,
                     selected = themeMode == ThemeMode.DARK,
                     onClick = { onThemeModeChange(ThemeMode.DARK) }
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            SettingsSection(title = "Collections") {
+                CollectionsManager(
+                    collections = collections,
+                    onCreateClick = { showCreateCollection = true }
                 )
             }
 
@@ -627,6 +668,80 @@ private fun PageLimitChoice(
         colors = colors
     ) {
         Text("$limit", fontWeight = FontWeight.Bold)
+    }
+}
+
+/**
+ * Compact in-Settings collection manager. Renders the live count plus a
+ * preview of up to four existing collections (emoji + name) so the user
+ * sees what they already have before deciding to add another, and a
+ * primary "Create a collection" CTA that opens [CreateCollectionDialog].
+ *
+ * Editing and deleting collections still happens inside Browse (drill in,
+ * use the pencil / trash actions on user-created collections) — we do
+ * not duplicate that surface here.
+ */
+@Composable
+private fun CollectionsManager(
+    collections: List<CategoryEntity>,
+    onCreateClick: () -> Unit
+) {
+    Text(
+        if (collections.isEmpty()) {
+            "Group saves into collections — \"Recipes\", \"Read later\", anything that fits."
+        } else {
+            "You have ${collections.size} collection${if (collections.size == 1) "" else "s"}. Edit or delete them from Browse."
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    if (collections.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            collections.take(4).forEach { c ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(androidx.compose.ui.graphics.Color(c.colorHex).copy(alpha = 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(c.emoji, style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        c.name,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            if (collections.size > 4) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        "+${collections.size - 4}",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(14.dp))
+    Button(
+        onClick = onCreateClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Create a collection", fontWeight = FontWeight.Bold)
     }
 }
 

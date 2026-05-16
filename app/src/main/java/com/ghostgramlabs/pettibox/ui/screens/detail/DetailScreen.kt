@@ -53,8 +53,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,6 +90,7 @@ import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
+import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import kotlinx.coroutines.launch
@@ -102,6 +101,7 @@ import java.io.File
 fun DetailScreen(
     onBack: () -> Unit,
     onDeleted: () -> Unit,
+    onOpenTag: (String) -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -146,7 +146,7 @@ fun DetailScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete this save?") },
-            text = { Text("This can't be undone.") },
+            text = { Text("It's gone for good — there's no archive to recover from. Archive instead if you might want it back.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
@@ -222,91 +222,7 @@ fun DetailScreen(
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.togglePinned()
-                    }) {
-                        Icon(
-                            if (item?.isPinned == true) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                            contentDescription = if (item?.isPinned == true) "Unpin" else "Pin",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.toggleFavorite()
-                    }) {
-                        Icon(
-                            if (item?.isFavorite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = if (item?.isFavorite == true) "Unfavorite" else "Favorite",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = { showReminderSheet = true }) {
-                        Icon(
-                            Icons.Rounded.AccessTime,
-                            contentDescription = if (item?.remindAt != null) "Reminder set" else "Remind me",
-                            tint = if (item?.remindAt != null)
-                                MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = {
-                        item?.let {
-                            val nowArchived = it.isArchived
-                            viewModel.setArchived(!nowArchived)
-                            scope.launch {
-                                val result = snackbarHostState.showSnackbar(
-                                    message = if (!nowArchived) "Archived" else "Unarchived",
-                                    actionLabel = "Undo"
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    viewModel.setArchived(nowArchived)
-                                }
-                            }
-                        }
-                    }) {
-                        Icon(
-                            if (item?.isArchived == true) Icons.Rounded.Unarchive else Icons.Rounded.Archive,
-                            contentDescription = if (item?.isArchived == true) "Unarchive" else "Archive"
-                        )
-                    }
-                    IconButton(onClick = {
-                        item?.let {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, it.url ?: it.title)
-                            }
-                            runCatching {
-                                ctx.startActivity(Intent.createChooser(intent, "Share"))
-                            }.onFailure {
-                                scope.launch { snackbarHostState.showSnackbar("Couldn't share this save") }
-                            }
-                        }
-                    }) { Icon(Icons.Rounded.Share, contentDescription = "Share") }
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent
-                )
-            )
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (item == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -323,6 +239,64 @@ fun DetailScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            // Bold page heading + a single inline action row replace the
+            // generic Material TopAppBar — Detail used to read as a
+            // different app from Home/Browse because the topbar lost the
+            // hand-drawn voice. Title, source emoji, and "saved …"
+            // metadata now sit at the top of the scrolling column with
+            // the same displayMedium-Black treatment as every other
+            // screen.
+            ScreenHeading(
+                title = item.title.ifBlank { "Untitled save" },
+                subtitle = "${source.emoji} ${source.displayName} · saved ${TimeFormat.relative(item.createdAt)}",
+                leading = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+            DetailActionBar(
+                isPinned = item.isPinned,
+                isFavorite = item.isFavorite,
+                isArchived = item.isArchived,
+                hasReminder = item.remindAt != null,
+                onTogglePin = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.togglePinned()
+                },
+                onToggleFavorite = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.toggleFavorite()
+                },
+                onRemind = { showReminderSheet = true },
+                onToggleArchive = {
+                    val nowArchived = item.isArchived
+                    viewModel.setArchived(!nowArchived)
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = if (!nowArchived) "Tucked away" else "Back on the shelf",
+                            actionLabel = "Undo"
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.setArchived(nowArchived)
+                        }
+                    }
+                },
+                onShare = {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, item.url ?: item.title)
+                    }
+                    runCatching {
+                        ctx.startActivity(Intent.createChooser(intent, "Share"))
+                    }.onFailure {
+                        scope.launch { snackbarHostState.showSnackbar("Couldn't share this save") }
+                    }
+                },
+                onDelete = { showDeleteConfirm = true }
+            )
+            Spacer(Modifier.height(16.dp))
+
             // Big preview: horizontal scroll if there are multiple attachments,
             // single hero otherwise. Attachments awaiting Undo are filtered
             // out so the user perceives them as removed immediately.
@@ -417,24 +391,25 @@ fun DetailScreen(
             if (gallery.size > 1) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${gallery.size} items - swipe, or share one",
+                    "${gallery.size} items · swipe through, share one",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 24.dp)
+                    modifier = Modifier.padding(start = 20.dp)
                 )
             }
             Spacer(Modifier.height(16.dp))
 
-            Column(Modifier.padding(horizontal = 24.dp)) {
+            // Body uses the same 20.dp horizontal rhythm as Home / Browse /
+            // Search. Was 24.dp before — 4 px off looks fine alone but
+            // visibly misaligns when the user navigates between screens.
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                // Editable title still lives in the body so the user can
+                // rename their save inline — but it's secondary now: the
+                // big page title above shows the canonical name; this
+                // field is a tap-to-edit affordance.
                 EditableTitle(
                     initial = item.title,
                     onSave = viewModel::updateTitle
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "${source.emoji} ${source.displayName} - saved ${TimeFormat.relative(item.createdAt)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 if (!item.url.isNullOrBlank()) {
@@ -467,7 +442,11 @@ fun DetailScreen(
                 }
 
                 Spacer(Modifier.height(20.dp))
-                Text("Category", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Collection",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 Spacer(Modifier.height(8.dp))
                 LazyRow(
                     contentPadding = PaddingValues(end = 16.dp),
@@ -496,7 +475,8 @@ fun DetailScreen(
                     tags = state.tags.map { it.name },
                     accent = accent,
                     onAdd = viewModel::addTag,
-                    onRemove = viewModel::removeTag
+                    onRemove = viewModel::removeTag,
+                    onOpenTag = onOpenTag
                 )
 
                 Spacer(Modifier.height(24.dp))
@@ -518,6 +498,114 @@ fun DetailScreen(
                 Spacer(Modifier.height(48.dp))
             }
         }
+    }
+}
+
+/**
+ * Horizontal pill-shaped action bar that sits right under the page
+ * heading. Six round icon-only targets — pin / favorite / remind /
+ * archive / share / delete — that mirror the long-press QuickActionSheet
+ * one-to-one. Replaces the prior Material `TopAppBar.actions` row, which
+ * lived in a default M3 surface and stripped the rest of the screen's
+ * hand-drawn voice.
+ *
+ * Active states tint with primary (or error on delete); inactive states
+ * use a quiet surface so the bar reads as a tool palette rather than as
+ * the page header.
+ */
+@Composable
+private fun DetailActionBar(
+    isPinned: Boolean,
+    isFavorite: Boolean,
+    isArchived: Boolean,
+    hasReminder: Boolean,
+    onTogglePin: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onRemind: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        DetailActionButton(
+            icon = if (isPinned) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+            label = if (isPinned) "Unpin" else "Pin",
+            active = isPinned,
+            onClick = onTogglePin
+        )
+        DetailActionButton(
+            icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            label = if (isFavorite) "Loved" else "Love it",
+            active = isFavorite,
+            onClick = onToggleFavorite
+        )
+        DetailActionButton(
+            icon = Icons.Rounded.AccessTime,
+            label = if (hasReminder) "Reminder set" else "Remind",
+            active = hasReminder,
+            onClick = onRemind
+        )
+        DetailActionButton(
+            icon = if (isArchived) Icons.Rounded.Unarchive else Icons.Rounded.Archive,
+            label = if (isArchived) "Unarchive" else "Archive",
+            active = isArchived,
+            onClick = onToggleArchive
+        )
+        DetailActionButton(
+            icon = Icons.Rounded.Share,
+            label = "Share",
+            active = false,
+            onClick = onShare
+        )
+        DetailActionButton(
+            icon = Icons.Rounded.Delete,
+            label = "Delete",
+            active = false,
+            destructive = true,
+            onClick = onDelete
+        )
+    }
+}
+
+@Composable
+private fun DetailActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    destructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val tint = when {
+        destructive -> scheme.error
+        active -> scheme.primary
+        else -> scheme.onSurface
+    }
+    val bg = when {
+        active -> scheme.primary.copy(alpha = 0.14f)
+        else -> scheme.surface
+    }
+    val border = when {
+        active -> scheme.primary.copy(alpha = 0.55f)
+        else -> scheme.outline.copy(alpha = 0.5f)
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -959,7 +1047,8 @@ private fun TagsRow(
     tags: List<String>,
     accent: Color,
     onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit
+    onRemove: (String) -> Unit,
+    onOpenTag: (String) -> Unit
 ) {
     var input by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     Column {
@@ -968,17 +1057,34 @@ private fun TagsRow(
         if (tags.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(tags, key = { it }) { tag ->
+                    // The previous chip swallowed every tap into onRemove,
+                    // which made tags read like buttons that destroy
+                    // themselves. Splitting the body from the trailing
+                    // "✕" lets a tap on the chip navigate to the tag's
+                    // drill — discovering other saves with the same tag —
+                    // while keeping a small explicit remove affordance.
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(accent.copy(alpha = 0.14f))
-                            .clickable { onRemove(tag) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text("#$tag", style = MaterialTheme.typography.labelLarge, color = accent)
-                        Spacer(Modifier.width(4.dp))
-                        Text("x", style = MaterialTheme.typography.labelSmall, color = accent)
+                        Text(
+                            "#$tag",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accent,
+                            modifier = Modifier
+                                .clickable { onOpenTag(tag) }
+                                .padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)
+                        )
+                        Text(
+                            "✕",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accent.copy(alpha = 0.85f),
+                            modifier = Modifier
+                                .clickable { onRemove(tag) }
+                                .padding(start = 2.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
+                        )
                     }
                 }
             }

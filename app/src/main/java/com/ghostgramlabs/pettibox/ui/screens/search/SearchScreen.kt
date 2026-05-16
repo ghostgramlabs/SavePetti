@@ -60,6 +60,7 @@ import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SearchField
+import com.ghostgramlabs.pettibox.ui.components.SectionHeader
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +74,12 @@ fun SearchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // O(1) accent lookup per result card — mirrors the Home perf pass.
+    // Without this, every scroll frame ran a linear scan through
+    // state.categories per visible row.
+    val categoriesById = remember(state.categories) {
+        state.categories.associateBy { it.id }
+    }
 
     // Long-press quick-action plumbing — identical pattern to HomeScreen.
     var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
@@ -185,38 +192,53 @@ fun SearchScreen(
 
             val anyFilter = activeFilterCount > 0
             when {
+                // Blank query, no filters: render the Quick-suggestion
+                // strip in-line with a friendly empty state below. The
+                // previous layout stacked the suggestions ABOVE a
+                // separately-centered EmptyState, which read as two
+                // disjoint screens. Now they share one composition.
                 state.query.isBlank() && !anyFilter -> {
-                    QuickSearchSuggestions(
-                        onToggleType = viewModel::toggleType
+                    Spacer(Modifier.height(8.dp))
+                    SectionHeader(
+                        title = "Try a starter",
+                        subtitle = "Filter by what kind of save"
                     )
+                    Spacer(Modifier.height(8.dp))
+                    QuickSearchSuggestions(onToggleType = viewModel::toggleType)
                     EmptyState(
                         emoji = "\uD83D\uDD0D",
-                        headline = "Find anything",
-                        body = "Try a suggestion, or type a word from a title, note, source, or OCR text."
+                        headline = "Find anything you stashed",
+                        body = "Type a word from a title, note, source, link, tag, or text inside an image or PDF. Older screenshots are still indexing \u2014 give them a moment."
                     )
                 }
                 state.results.isEmpty() -> EmptyState(
                     emoji = "\uD83E\uDD14",
                     headline = "Nothing matched",
-                    body = "Try a shorter word, drop a filter, or check spelling. OCR is still indexing recent screenshots - give it a sec."
+                    body = "Try a shorter word, drop a filter, or check the spelling. OCR keeps catching up in the background \u2014 it might find it in a moment."
                 )
                 else -> {
                     LazyVerticalStaggeredGrid(
                         columns = StaggeredGridCells.Fixed(2),
-                        contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
+                        contentPadding = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 96.dp),
                         verticalItemSpacing = 12.dp,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item(span = StaggeredGridItemSpan.FullLine) {
-                            Text(
-                                "${state.results.size} match${if (state.results.size == 1) "" else "es"}",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                            // SectionHeader gives results the same
+                            // squiggle-underline treatment as every other
+                            // section on Home and Browse, so the page
+                            // reads as part of the same app.
+                            SectionHeader(
+                                title = "Matches",
+                                subtitle = "${state.results.size} found"
                             )
                         }
-                        items(state.results, key = { "s-${it.id}" }) { item ->
-                            val cat = state.categories.firstOrNull { it.id == item.categoryId }
+                        items(
+                            state.results,
+                            key = { it.id },
+                            contentType = { "result" }
+                        ) { item ->
+                            val cat = categoriesById[item.categoryId]
                             SaveCard(
                                 item = item,
                                 accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
@@ -342,46 +364,56 @@ private fun FilterToolbar(
 
         Spacer(Modifier.width(8.dp))
 
-        // Compact horizontal display of currently-active chips (read-only summary,
-        // tap to remove individually).
+        // Compact horizontal display of currently-active filters. Tapping
+        // the trailing ✕ removes the filter — the label body is read-only
+        // so a tap on the chip text doesn't silently kill a filter the
+        // user is using as a reference for what they're looking at.
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             state.typeFilter?.let { t ->
-                item { ActivePill("${t.label()} x") { onToggleType(t) } }
+                item { ActivePill(t.label()) { onToggleType(t) } }
             }
             state.categoryFilter?.let { cid ->
                 val c = state.categories.firstOrNull { it.id == cid }
                 if (c != null) {
-                    item { ActivePill("${c.emoji} ${c.name} x") { onToggleCategory(cid) } }
+                    item { ActivePill("${c.emoji} ${c.name}") { onToggleCategory(cid) } }
                 }
             }
             state.sourceFilter?.let { sf ->
                 val sa = runCatching { SourceApp.valueOf(sf) }.getOrNull()
                 if (sa != null) {
-                    item { ActivePill("${sa.emoji} ${sa.displayName} x") { onToggleSource(sf) } }
+                    item { ActivePill("${sa.emoji} ${sa.displayName}") { onToggleSource(sf) } }
                 }
             }
             state.tagFilter?.let { tag ->
-                item { ActivePill("#$tag x") { onToggleTag(tag) } }
+                item { ActivePill("#$tag") { onToggleTag(tag) } }
             }
         }
     }
 }
 
 @Composable
-private fun ActivePill(label: String, onClick: () -> Unit) {
+private fun ActivePill(label: String, onRemove: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    Box(
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(scheme.primary.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
             color = scheme.primary,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+        )
+        Text(
+            "✕",
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .clickable(onClick = onRemove)
+                .padding(start = 2.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)
         )
     }
 }

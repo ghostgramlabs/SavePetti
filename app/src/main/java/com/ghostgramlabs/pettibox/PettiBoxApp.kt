@@ -6,7 +6,7 @@ import androidx.work.Configuration
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
 import com.ghostgramlabs.pettibox.data.reminders.ReminderNotifications
-import com.ghostgramlabs.pettibox.data.reminders.ReminderWorker
+import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -51,16 +51,13 @@ class PettiBoxApp : Application(), Configuration.Provider {
                 LocalBackupWorker.cancel(this@PettiBoxApp)
             }
         }
-        // Re-enqueue any reminder workers that should still fire. Worker
-        // state survives reboots normally via WorkManager, but a data
-        // clear or fresh install would lose them — this is the analogue
-        // of the backup-worker reconciliation above. Past-due reminders
-        // fire immediately so the user doesn't lose them entirely.
+        // Re-arm any reminder alarms that should still fire. AlarmManager
+        // alarms do not survive a reboot or a data wipe; the BOOT_COMPLETED
+        // receiver handles boot, this handles cold-start after a data
+        // clear or fresh install. Past-due reminders fire immediately so
+        // the user doesn't lose them entirely.
         appScope.launch {
-            repository.dueOrPendingReminders().forEach { item ->
-                val at = item.remindAt ?: return@forEach
-                ReminderWorker.schedule(this@PettiBoxApp, item.id, at)
-            }
+            ReminderScheduler.rescheduleAll(this@PettiBoxApp, repository)
         }
     }
 }

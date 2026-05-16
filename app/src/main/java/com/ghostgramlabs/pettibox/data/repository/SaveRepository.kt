@@ -108,11 +108,18 @@ class SaveRepository @Inject constructor(
     fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity> =
         saveDao.pagedBySource(sourceApp)
 
+    fun pagedFavorites(): PagingSource<Int, SaveItemEntity> = saveDao.pagedFavorites()
+
+    fun pagedArchived(): PagingSource<Int, SaveItemEntity> = saveDao.pagedArchived()
+
+    fun pagedByTag(name: String): PagingSource<Int, SaveItemEntity> = saveDao.pagedByTag(name)
+
     // Aggregates — never load full rows just to count.
     fun observeSourceCounts(): Flow<List<SourceCount>> = saveDao.observeSourceCounts()
     fun observeCategoryCounts(): Flow<List<CategoryCount>> = saveDao.observeCategoryCounts()
     fun observeTotal(): Flow<Int> = saveDao.observeTotal()
     fun observeArchivedTotal(): Flow<Int> = saveDao.observeArchivedTotal()
+    fun observeFavoriteTotal(): Flow<Int> = saveDao.observeFavoriteTotal()
 
     suspend fun setFavorite(id: Long, fav: Boolean) = saveDao.setFavorite(id, fav)
     suspend fun setPinned(id: Long, pin: Boolean) = saveDao.setPinned(id, pin)

@@ -105,6 +105,44 @@ interface SaveDao {
     )
     fun pagedBySource(sourceApp: String): PagingSource<Int, SaveItemEntity>
 
+    /** Every favorited live save — backs the dedicated Favorites destination. */
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE is_favorite = 1 AND is_archived = 0
+        ORDER BY is_pinned DESC, created_at DESC
+        """
+    )
+    fun pagedFavorites(): PagingSource<Int, SaveItemEntity>
+
+    /**
+     * Every archived save across all collections. Crucially this does not
+     * filter by category_id, so an archived item that was never assigned
+     * a collection is still reachable — the previous in-collection
+     * archive toggle could only surface archived items whose collection
+     * the user happened to drill into.
+     */
+    @Query(
+        """
+        SELECT * FROM save_items
+        WHERE is_archived = 1
+        ORDER BY updated_at DESC
+        """
+    )
+    fun pagedArchived(): PagingSource<Int, SaveItemEntity>
+
+    /** Live saves carrying a given tag (case-insensitive). */
+    @Query(
+        """
+        SELECT s.* FROM save_items s
+        JOIN item_tags it ON it.item_id = s.id
+        JOIN tags t ON t.id = it.tag_id
+        WHERE t.name = :name COLLATE NOCASE AND s.is_archived = 0
+        ORDER BY s.is_pinned DESC, s.created_at DESC
+        """
+    )
+    fun pagedByTag(name: String): PagingSource<Int, SaveItemEntity>
+
     // ── Aggregate queries: avoid loading rows just to count ───────────────
     // Counts also exclude archived so the user's home dashboard reflects
     // their "live" shelf size.
@@ -136,6 +174,10 @@ interface SaveDao {
     /** Count of archived items only — used to differentiate "fresh install" (0) from "you archived everything" (>0). */
     @Query("SELECT COUNT(*) FROM save_items WHERE is_archived = 1")
     fun observeArchivedTotal(): Flow<Int>
+
+    /** Count of live favorited items — drives the Favorites tile label in Browse. */
+    @Query("SELECT COUNT(*) FROM save_items WHERE is_favorite = 1 AND is_archived = 0")
+    fun observeFavoriteTotal(): Flow<Int>
 
     // ── Reminders ─────────────────────────────────────────────────────────
 

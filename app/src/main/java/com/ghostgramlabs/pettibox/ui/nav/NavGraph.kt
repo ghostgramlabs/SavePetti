@@ -29,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
+import com.ghostgramlabs.pettibox.ui.screens.categories.BrowseDestination
 import com.ghostgramlabs.pettibox.ui.screens.categories.CategoriesScreen
 import com.ghostgramlabs.pettibox.ui.screens.detail.DetailScreen
 import com.ghostgramlabs.pettibox.ui.screens.home.HomeScreen
@@ -119,7 +120,14 @@ fun PettiBoxNavGraph(
             ) {
                 DetailScreen(
                     onBack = { nav.popBackStack() },
-                    onDeleted = { nav.popBackStack() }
+                    onDeleted = { nav.popBackStack() },
+                    onOpenTag = { name ->
+                        nav.navigate(
+                            Routes.categories(
+                                BrowseDestination.toCid(BrowseDestination.Tag(name))
+                            )
+                        )
+                    }
                 )
             }
             composable(

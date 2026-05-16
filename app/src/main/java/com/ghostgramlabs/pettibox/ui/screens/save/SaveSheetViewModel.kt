@@ -244,7 +244,7 @@ class SaveSheetViewModel @Inject constructor(
         // to be nudged about this save later. Notification permission is
         // requested at the UI layer before we ever get here.
         s.remindAt?.let { at ->
-            com.ghostgramlabs.pettibox.data.reminders.ReminderWorker.schedule(appContext, id, at)
+            com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler.schedule(appContext, id, at)
         }
         val tagNames = parseTagInput(s.tagsInput)
         if (tagNames.isNotEmpty()) repo.setTagsForItem(id, tagNames)

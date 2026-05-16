@@ -198,7 +198,7 @@ fun SaveSheet(
             )
             Text(
                 "${state.sourceApp.emoji} ${state.sourceApp.displayName}" +
-                    if (state.attachments.size > 1) " - ${state.attachments.size} items" else "",
+                    if (state.attachments.size > 1) " · ${state.attachments.size} items" else "",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -423,7 +423,7 @@ private fun PickExistingBody(
                 val cat = categories.firstOrNull { it.id == item.categoryId }
                 PickRow(
                     title = item.title,
-                    subtitle = listOfNotNull(cat?.let { "${it.emoji} ${it.name}" }, item.url).joinToString(" - ").take(80),
+                    subtitle = listOfNotNull(cat?.let { "${it.emoji} ${it.name}" }, item.url).joinToString(" · ").take(80),
                     onClick = { onPick(item.id) }
                 )
             }

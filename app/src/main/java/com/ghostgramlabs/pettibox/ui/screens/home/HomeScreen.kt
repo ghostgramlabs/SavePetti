@@ -98,6 +98,14 @@ fun HomeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
+    // Category lookups happen per-card per-recomposition on every scroll
+    // frame. The list grew from O(1) categories to a few dozen as users
+    // create their own — the linear scan was hot enough to show up in the
+    // recomp profiler. Memoize as a map keyed by id; rebuilds only when
+    // the underlying list changes.
+    val categoriesById = remember(state.categories) {
+        state.categories.associateBy { it.id }
+    }
 
     // Routing state for the manual-add flow. The chooser sheet sets one of
     // these; SaveSheet renders when [pendingShare] is non-null.
@@ -361,7 +369,7 @@ fun HomeScreen(
                         // like books on a shelf rather than items in a grid.
                         PinnedShelf(
                             items = state.pinned,
-                            categories = state.categories,
+                            categoriesById = categoriesById,
                             onOpenItem = onOpenItem,
                             onLongPress = { quickActionItem = it }
                         )
@@ -376,7 +384,7 @@ fun HomeScreen(
                         Spacer(Modifier.height(8.dp))
                         FavoritesRow(
                             items = state.favorites,
-                            categories = state.categories,
+                            categoriesById = categoriesById,
                             onOpenItem = onOpenItem,
                             onLongPress = { quickActionItem = it }
                         )
@@ -398,10 +406,21 @@ fun HomeScreen(
                 }
             }
 
-            items(state.recent, key = { "r-${it.id}" }) { item ->
+            // `key` uses the raw row id (Long, primitive-stable) so
+            // Compose can identify items across recompositions without
+            // allocating a new String per item per frame as it did with
+            // "r-${it.id}". `contentType` is the section name so the
+            // staggered grid doesn't recycle across visually different
+            // sections in the rare case future sections are paged into
+            // this list.
+            items(
+                state.recent,
+                key = { it.id },
+                contentType = { "recent" }
+            ) { item ->
                 CardForItem(
                     item = item,
-                    categories = state.categories,
+                    category = categoriesById[item.categoryId],
                     onOpen = onOpenItem,
                     onLongPress = { quickActionItem = it }
                 )
@@ -715,16 +734,15 @@ private fun CategoryStrip(
 @Composable
 private fun CardForItem(
     item: SaveItemEntity,
-    categories: List<CategoryEntity>,
+    category: CategoryEntity?,
     onOpen: (Long) -> Unit,
     onLongPress: (SaveItemEntity) -> Unit = {}
 ) {
-    val cat = categories.firstOrNull { it.id == item.categoryId }
     SaveCard(
         item = item,
-        accent = cat?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
-        categoryEmoji = cat?.emoji,
-        categoryName = cat?.name,
+        accent = category?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary,
+        categoryEmoji = category?.emoji,
+        categoryName = category?.name,
         onClick = { onOpen(item.id) },
         onLongClick = { onLongPress(item) }
     )
@@ -740,7 +758,7 @@ private fun CardForItem(
 @Composable
 private fun PinnedShelf(
     items: List<SaveItemEntity>,
-    categories: List<CategoryEntity>,
+    categoriesById: Map<String, CategoryEntity>,
     onOpenItem: (Long) -> Unit,
     onLongPress: (SaveItemEntity) -> Unit = {}
 ) {
@@ -752,13 +770,13 @@ private fun PinnedShelf(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            itemsIndexed(items, key = { _, it -> "p-${it.id}" }) { idx, item ->
+            itemsIndexed(items, key = { _, it -> it.id }) { idx, item ->
                 val tilt = tilts[idx % tilts.size]
                 val width = widthsDp[idx % widthsDp.size].dp
                 // Alternating cards "slump" lower so the row reads as
                 // hand-arranged, not aligned-by-grid.
                 val lift = if (idx % 2 == 1) 10.dp else 0.dp
-                val cat = categories.firstOrNull { it.id == item.categoryId }
+                val cat = item.categoryId?.let { categoriesById[it] }
                 Box(
                     Modifier
                         .padding(top = lift, bottom = 0.dp)
@@ -794,7 +812,7 @@ private fun PinnedShelf(
 @Composable
 private fun FavoritesRow(
     items: List<SaveItemEntity>,
-    categories: List<CategoryEntity>,
+    categoriesById: Map<String, CategoryEntity>,
     onOpenItem: (Long) -> Unit,
     onLongPress: (SaveItemEntity) -> Unit = {}
 ) {
@@ -803,8 +821,8 @@ private fun FavoritesRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        items(items, key = { "fav-${it.id}" }) { item ->
-            val cat = categories.firstOrNull { it.id == item.categoryId }
+        items(items, key = { it.id }) { item ->
+            val cat = item.categoryId?.let { categoriesById[it] }
             Box(Modifier.width(160.dp)) {
                 SaveCard(
                     item = item,

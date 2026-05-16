@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
+import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorker
 import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
@@ -12,11 +14,14 @@ import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
+import com.ghostgramlabs.pettibox.ui.components.NewCollection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,6 +35,33 @@ class SettingsViewModel @Inject constructor(
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
     val pdfPageLimit: Flow<Int> = ocrPreferences.pdfPageLimit
     val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
+    /** Live category list — drives both the count label and conflict checks. */
+    val collections: Flow<List<CategoryEntity>> = repo.observeCategories()
+
+    /**
+     * Create a collection from Settings. Mirrors [SaveSheetViewModel]'s
+     * createCollection but without the auto-select-and-save side-effect —
+     * the user is in Settings, not mid-save.
+     *
+     * The callback returns the new id so the UI can flash a confirmation
+     * containing the collection's name and emoji.
+     */
+    fun createCollection(nc: NewCollection, onCreated: ((CategoryEntity) -> Unit)? = null) =
+        viewModelScope.launch {
+            val existing = repo.observeCategories().first()
+            val id = "user_" + UUID.randomUUID().toString().take(8)
+            val maxOrder = (existing.maxOfOrNull { it.sortOrder } ?: 0) + 1
+            val entity = CategoryEntity(
+                id = id,
+                name = nc.name,
+                emoji = nc.emoji,
+                colorHex = nc.colorHex,
+                sortOrder = maxOrder,
+                userCreated = true
+            )
+            repo.upsertCategory(entity)
+            onCreated?.invoke(entity)
+        }
 
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 
