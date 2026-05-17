@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -131,8 +130,7 @@ fun SearchScreen(
     }
 
     LaunchedEffect(initialQuery, initialSource) {
-        if (initialQuery.isNotBlank() && state.query.isBlank()) viewModel.onQuery(initialQuery)
-        if (initialSource != null && state.sourceFilter == null) viewModel.toggleSource(initialSource)
+        viewModel.applyRouteFilters(initialQuery, initialSource)
     }
 
     val activeFilterCount = listOfNotNull(
@@ -265,30 +263,15 @@ private fun SearchSortStrip(selected: SearchSort, onSelect: (SearchSort) -> Unit
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(SearchSort.entries, key = { it.name }) { sort ->
-            val active = selected == sort
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .border(
-                        1.dp,
-                        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        RoundedCornerShape(12.dp)
-                    )
-                    .clickable { onSelect(sort) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    sort.label,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
-            }
+        itemsIndexed(SearchSort.entries, key = { _, sort -> sort.name }) { index, sort ->
+            CategoryChip(
+                label = sort.label,
+                emoji = sort.emoji,
+                color = sort.accent,
+                selected = selected == sort,
+                tilt = if (index % 2 == 0) -2f else 1.5f,
+                onClick = { onSelect(sort) }
+            )
         }
     }
 }
@@ -566,6 +549,24 @@ private fun typeChoices() = listOf(
     Triple(ContentType.TEXT, "Text", "\uD83D\uDCDD"),
     Triple(ContentType.NOTE, "Notes", "\uD83D\uDDD2")
 )
+
+private val SearchSort.emoji: String
+    get() = when (this) {
+        SearchSort.RELEVANT -> "\u2728"
+        SearchSort.NEWEST -> "\u2193"
+        SearchSort.OLDEST -> "\u2191"
+        SearchSort.UPDATED -> "\u270E"
+        SearchSort.REMINDER -> "\u23F0"
+    }
+
+private val SearchSort.accent: Color
+    @Composable get() = when (this) {
+        SearchSort.RELEVANT -> MaterialTheme.colorScheme.primary
+        SearchSort.NEWEST -> MaterialTheme.colorScheme.secondary
+        SearchSort.OLDEST -> MaterialTheme.colorScheme.tertiary
+        SearchSort.UPDATED -> Color(0xFF6E7FB8)
+        SearchSort.REMINDER -> Color(0xFF2F9B8F)
+    }
 
 private fun ContentType.label(): String = when (this) {
     ContentType.LINK -> "Link"

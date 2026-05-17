@@ -154,6 +154,10 @@ class SearchViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchState())
 
     fun onQuery(q: String) { _query.value = q }
+    fun applyRouteFilters(query: String, source: String?) {
+        _query.value = query
+        _sourceFilter.value = source
+    }
     fun toggleSource(name: String) {
         _sourceFilter.value = if (_sourceFilter.value == name) null else name
     }
