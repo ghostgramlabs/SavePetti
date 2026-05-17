@@ -25,6 +25,7 @@ fun EmptyState(
     cta: String? = null,
     onCta: (() -> Unit)? = null,
     fillScreen: Boolean = true,
+    pose: KeeperPose? = null,
     modifier: Modifier = Modifier
 ) {
     val layoutModifier = if (fillScreen) modifier.fillMaxSize() else modifier.fillMaxWidth()
@@ -33,7 +34,7 @@ fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        KeeperMascot(size = 118.dp, accent = accent)
+        KeeperMascot(size = 118.dp, accent = accent, pose = pose ?: keeperPoseFor(headline, body))
         Spacer(Modifier.height(20.dp))
         Text(
             headline,
@@ -62,5 +63,19 @@ fun EmptyState(
                 Text(cta, style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+private fun keeperPoseFor(headline: String, body: String): KeeperPose {
+    val text = "$headline $body".lowercase()
+    return when {
+        "reminder" in text || "nudge" in text -> KeeperPose.Reminder
+        "archive" in text || "archived" in text || "tucked" in text -> KeeperPose.Archive
+        "search" in text || "matched" in text || "find" in text || "spelling" in text -> KeeperPose.Search
+        "tag" in text -> KeeperPose.Search
+        "share menu" in text || "first" in text -> KeeperPose.Welcome
+        "favorite" in text || "heart" in text -> KeeperPose.SaveSuccess
+        "failed" in text || "couldn't" in text || "unavailable" in text -> KeeperPose.Error
+        else -> KeeperPose.EmptyShelf
     }
 }

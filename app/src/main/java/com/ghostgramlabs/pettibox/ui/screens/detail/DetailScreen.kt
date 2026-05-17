@@ -89,6 +89,7 @@ import com.ghostgramlabs.pettibox.domain.model.ContentType
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
+import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
@@ -560,7 +561,7 @@ private fun MissingSaveState(
             }
         )
         Spacer(Modifier.height(48.dp))
-        KeeperMascot(size = 128.dp)
+        KeeperMascot(size = 128.dp, pose = KeeperPose.MissingSave)
         Spacer(Modifier.height(20.dp))
         Text(
             "This save is no longer available.",
@@ -1032,11 +1033,16 @@ private fun OcrTextSection(doc: OcrDocText) {
         }
         Spacer(Modifier.height(8.dp))
         if (doc.text.isNullOrBlank()) {
-            Text(
-                doc.status.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KeeperMascot(size = 54.dp, pose = KeeperPose.Ocr)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    doc.status.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         } else {
             Text(
                 "Long-press to select a line or drag for multiple lines.",

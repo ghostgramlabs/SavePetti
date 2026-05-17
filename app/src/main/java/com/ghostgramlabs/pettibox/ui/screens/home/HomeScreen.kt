@@ -79,6 +79,7 @@ import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
+import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
@@ -465,6 +466,7 @@ private fun ReminderWarningBanner(
         KeeperMascot(
             size = 42.dp,
             accent = scheme.error,
+            pose = KeeperPose.NotificationsBlocked,
             modifier = Modifier.padding(end = 10.dp)
         )
         Text(
@@ -513,6 +515,7 @@ private fun HomeOnboardingDialog(
         icon = {
             KeeperMascot(
                 size = 92.dp,
+                pose = KeeperPose.Welcome,
                 badgeIcon = current.icon
             )
         },

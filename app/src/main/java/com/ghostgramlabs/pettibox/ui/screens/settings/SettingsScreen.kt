@@ -77,6 +77,7 @@ import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
+import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.mutableStateOf
@@ -403,6 +404,7 @@ fun SettingsScreen(
                     NoticeBanner(
                         text = "For on-the-dot reminders, allow Alarms & reminders in Android settings.",
                         action = "Open settings",
+                        pose = KeeperPose.Reminder,
                         onAction = {
                             if (!viewModel.openExactAlarmSettings()) {
                                 scope.launch { snackbarHostState.showSnackbar("Couldn't open alarm settings") }
@@ -570,6 +572,7 @@ fun SettingsScreen(
                         text = "PettiBox made a private backup, but couldn't copy it to your selected folder. Pick the folder again if it moved or permissions changed.",
                         action = "Choose folder",
                         onAction = { chooseBackupFolder.launch(null) },
+                        pose = KeeperPose.BackupWarning,
                         isError = true
                     )
                 }
@@ -754,6 +757,7 @@ private fun NoticeBanner(
     text: String,
     action: String,
     onAction: () -> Unit,
+    pose: KeeperPose = KeeperPose.Error,
     isError: Boolean = false
 ) {
     val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
@@ -768,6 +772,7 @@ private fun NoticeBanner(
         KeeperMascot(
             size = 40.dp,
             accent = color,
+            pose = pose,
             modifier = Modifier.padding(end = 10.dp)
         )
         Text(
