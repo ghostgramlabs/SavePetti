@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -781,6 +783,7 @@ private fun PageLimitChoice(
  * use the pencil / trash actions on user-created collections) — we do
  * not duplicate that surface here.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CollectionsManager(
     collections: List<CategoryEntity>,
@@ -797,8 +800,22 @@ private fun CollectionsManager(
     )
     if (collections.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            collections.take(4).forEach { c ->
+        // Show ALL collections, newest first. Was capped at the first 4
+        // by sortOrder, which hid every newly-created collection (new
+        // ones get the highest sortOrder and end up past index 4) — the
+        // exact symptom: "I just made one and it doesn't show up." Also
+        // the previous Row{...} overflowed the screen edge when total
+        // chip width exceeded available space; FlowRow wraps to a second
+        // / third line so the entire list is visible.
+        val ordered = remember(collections) {
+            collections.sortedByDescending { it.createdAt }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            ordered.forEach { c ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -811,22 +828,8 @@ private fun CollectionsManager(
                     Text(
                         c.name,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-            if (collections.size > 4) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        "+${collections.size - 4}",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
                     )
                 }
             }

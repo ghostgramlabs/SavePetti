@@ -3,6 +3,8 @@ package com.ghostgramlabs.pettibox.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -400,12 +402,17 @@ fun ReminderCustomSheet(
         containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
+        // Vertical scroll so the sheet's content is always fully reachable
+        // even on small phones / landscape — the previous fixed
+        // heightIn(max = 560.dp) clipped the bottom of the sheet when the
+        // user's system font scale was bumped up. Dropping the max height
+        // and adding scroll lets the sheet expand or scroll as needed.
         Column(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(top = 6.dp, bottom = 8.dp)
-                .heightIn(max = 560.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 "Custom reminder",
@@ -518,16 +525,27 @@ fun ReminderCustomSheet(
     }
 
     if (showTimeDialog) {
+        // Force fully-expanded so the TimePicker (≈260 dp tall) never
+        // lands in the half-collapsed sheet state. Without this the user
+        // could only see the title and the top half of the clock face
+        // and had to drag the sheet up before tapping "Set time".
+        val timeSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showTimeDialog = false },
+            sheetState = timeSheetState,
             containerColor = MaterialTheme.colorScheme.background,
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
+            // Vertical scroll guards against the TimePicker overflowing
+            // on small / landscape screens — the clock face alone is
+            // ~260 dp, and with title + action row + nav padding the
+            // sheet would clip its bottom buttons on a 600 dp viewport.
             Column(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .padding(top = 8.dp, bottom = 8.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Text(
                     "Pick a time",

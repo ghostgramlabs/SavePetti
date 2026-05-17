@@ -6,8 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -330,37 +328,43 @@ private data class SpecialEntry(
     val onClick: () -> Unit
 )
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Horizontally-scrolling row of hub pills. Was a weighted 4-up FlowRow
+ * that compressed each label to ~80 dp wide — "Favorites" and "Reminders"
+ * wrapped to a second line inside the pill, making the row look broken.
+ * A scrolling row lets each pill take its natural width, fits more hubs
+ * if we add them later, and re-uses the same horizontal-strip rhythm
+ * the rest of Home uses (CategoryStrip / SourceStrip).
+ */
 @Composable
 private fun SpecialRow(items: List<SpecialEntry>) {
-    FlowRow(
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        items.forEach { e ->
-            SpecialPill(
-                entry = e,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        items(items, key = { it.label }) { e -> SpecialPill(entry = e) }
     }
 }
 
 @Composable
-private fun SpecialPill(entry: SpecialEntry, modifier: Modifier = Modifier) {
+private fun SpecialPill(entry: SpecialEntry) {
     val scheme = MaterialTheme.colorScheme
-    Column(
-        modifier
-            .clip(RoundedCornerShape(18.dp))
+    // Horizontal layout (icon + Column of label/count) gives the label
+    // room to stay on a single line at every reasonable label length,
+    // and keeps the pill compact vertically so the Browse header
+    // doesn't dominate the screen.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
             .background(entry.accent.copy(alpha = 0.14f))
             .clickable(onClick = entry.onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(start = 10.dp, end = 14.dp, top = 10.dp, bottom = 10.dp)
     ) {
         Box(
             Modifier
-                .size(36.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .background(entry.accent.copy(alpha = 0.95f)),
             contentAlignment = Alignment.Center
@@ -369,19 +373,24 @@ private fun SpecialPill(entry: SpecialEntry, modifier: Modifier = Modifier) {
                 entry.icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
-        Text(
-            entry.label,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-            color = scheme.onSurface
-        )
-        Text(
-            if (entry.count == 0) "Empty" else entry.count.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant
-        )
+        Spacer(Modifier.width(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                entry.label,
+                maxLines = 1,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = scheme.onSurface
+            )
+            Text(
+                if (entry.count == 0) "Empty" else entry.count.toString(),
+                maxLines = 1,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -676,34 +685,39 @@ private fun DrillView(
     }
 }
 
+/**
+ * Sort selector styled to match the rest of the app: rounded chips with
+ * a slight alternating tilt (same hand-arranged feel as CategoryChip),
+ * selected chip fills with primary, unselected uses a soft accent tint.
+ * Earlier this used hard-edged outlined-button rectangles that looked
+ * borrowed from a different design system.
+ */
 @Composable
 private fun SortStrip(selected: BrowseSort, onSelect: (BrowseSort) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     LazyRow(
         contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(BrowseSort.entries, key = { it.name }) { sort ->
             val active = selected == sort
+            val tilt = if (sort.ordinal % 2 == 0) -1.5f else 1.5f
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .rotate(tilt)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(
-                        if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .border(
-                        1.dp,
-                        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        RoundedCornerShape(12.dp)
+                        if (active) scheme.primary
+                        else scheme.primary.copy(alpha = 0.10f)
                     )
                     .clickable { onSelect(sort) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
                 Text(
                     sort.label,
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    color = if (active) Color.White else scheme.primary
                 )
             }
         }

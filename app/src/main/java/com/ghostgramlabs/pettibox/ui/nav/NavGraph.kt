@@ -1,24 +1,37 @@
 package com.ghostgramlabs.pettibox.ui.nav
 
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -143,27 +156,78 @@ fun PettiBoxNavGraph(
     }
 }
 
+/**
+ * Slim custom bottom bar. Material 3's [NavigationBar] reserves a fixed
+ * 80 dp surface plus its own paddings, which over the long-tap-only
+ * label adds up to a noticeable chunk of the viewport. This custom
+ * version is 60 dp tall + system-nav inset, with a small "selected dot"
+ * underneath the active icon (echoing the hand-drawn dots used in the
+ * onboarding page indicator). Selected tab also shows its label in tiny
+ * caps; inactive tabs are icon-only so the bar stays light.
+ */
 @Composable
 private fun BottomNav(nav: NavHostController, currentRoute: String) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        modifier = Modifier.border(
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        )
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(scheme.surface)
+            .navigationBarsPadding()
+            .height(60.dp)
     ) {
         topTabs.forEach { tab ->
             val selected = tab.matches(currentRoute)
-            NavigationBarItem(
+            BottomNavItem(
+                tab = tab,
                 selected = selected,
-                onClick = { nav.navigateTopLevel(tab.route) },
-                icon = { androidx.compose.material3.Icon(tab.icon, contentDescription = tab.label) },
-                label = { Text(tab.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                )
+                onClick = { nav.navigateTopLevel(tab.route) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomNavItem(
+    tab: TopTab,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val tint = if (selected) scheme.primary else scheme.onSurfaceVariant
+    Column(
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Icon(
+            tab.icon,
+            contentDescription = tab.label,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.height(3.dp))
+        if (selected) {
+            // Selected tab: tiny label + a small dot underneath, instead
+            // of M3's pill-shaped indicator. Reads as one continuous
+            // hand-drawn motif with the onboarding dots and section
+            // header squiggles elsewhere in the app.
+            Text(
+                tab.label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.primary
+            )
+        } else {
+            Box(
+                Modifier
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(scheme.onSurfaceVariant.copy(alpha = 0.0f))
             )
         }
     }
