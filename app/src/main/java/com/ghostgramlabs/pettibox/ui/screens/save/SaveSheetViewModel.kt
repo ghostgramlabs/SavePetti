@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import java.util.UUID
 import javax.inject.Inject
 
@@ -71,6 +72,7 @@ class SaveSheetViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SaveSheetState())
+    private val ingestGeneration = AtomicLong(0L)
 
     val state: StateFlow<SaveSheetState> = combine(
         _state, repo.observeCategories(), repo.observeRecent(30)
@@ -79,6 +81,7 @@ class SaveSheetViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), _state.value)
 
     fun ingest(share: IncomingShare) {
+        val generation = ingestGeneration.incrementAndGet()
         val firstUrl = share.urls.firstOrNull() ?: TextUtils.extractFirstUrl(share.text)
         val allImages = share.imageUris.map { it.toString() }
         val firstImage = allImages.firstOrNull()
@@ -119,9 +122,11 @@ class SaveSheetViewModel @Inject constructor(
         if (firstUrl != null) {
             viewModelScope.launch {
                 val meta = metadata.fetch(firstUrl)
-                val richerTitle = meta?.title ?: _state.value.title
-                _state.value = _state.value.copy(
-                    title = richerTitle,
+                if (generation != ingestGeneration.get()) return@launch
+                val current = _state.value
+                val richerTitle = meta?.title?.takeIf { it.isNotBlank() }
+                _state.value = current.copy(
+                    title = if (current.title == initialTitle && richerTitle != null) richerTitle else current.title,
                     previewImage = meta?.imageUrl,
                     description = meta?.description,
                     isResolving = false,
@@ -129,8 +134,8 @@ class SaveSheetViewModel @Inject constructor(
                     // (often more descriptive than the raw share text) so a
                     // YouTube URL whose share text was just the link still
                     // suggests "Music" once we know the page title.
-                    suggestedCategory = _state.value.suggestedCategory
-                        ?: suggestCategoryId(firstUrl, source, richerTitle)
+                    suggestedCategory = current.suggestedCategory
+                        ?: suggestCategoryId(firstUrl, source, richerTitle ?: current.title)
                 )
             }
         }

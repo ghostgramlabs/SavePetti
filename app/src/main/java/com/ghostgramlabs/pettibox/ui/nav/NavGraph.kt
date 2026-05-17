@@ -59,7 +59,7 @@ object Routes {
     fun search(q: String = "", src: String = "") =
         "search?q=${Uri.encode(q)}&src=${Uri.encode(src)}"
     fun detail(id: Long) = "detail/$id"
-    fun categories(cid: String? = null) = "categories?cid=${cid.orEmpty()}"
+    fun categories(cid: String? = null) = "categories?cid=${Uri.encode(cid.orEmpty())}"
 }
 
 private data class TopTab(
