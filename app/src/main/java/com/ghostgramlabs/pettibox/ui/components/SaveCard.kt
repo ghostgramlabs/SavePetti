@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -113,6 +114,19 @@ private fun Modifier.cardClickable(
     this.clickable(onClick = onClick)
 }
 
+/**
+ * Subtle drop shadow applied only in light mode. Dark mode already gets
+ * depth from M3's surface tonal lift; in light mode the surface is too
+ * close to the Bone background, so cards looked flat against the paper
+ * texture. A 2-3 dp shadow is enough to read as "paper lifted off the
+ * desk" without venturing into Material-elevation territory.
+ */
+@Composable
+private fun Modifier.lightCardShadow(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    return if (isLight) this.shadow(2.dp, shape, clip = false) else this
+}
+
 // ── Variants ──────────────────────────────────────────────────────────────
 
 @Composable
@@ -130,6 +144,7 @@ private fun PolaroidCard(
         Column(
             Modifier
                 .fillMaxWidth()
+                .lightCardShadow(RoundedCornerShape(6.dp))
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFFFDFBF6))
                 .border(1.dp, Color(0xFFE6DFD2), RoundedCornerShape(6.dp))
@@ -191,6 +206,7 @@ private fun LinkBookmarkCard(
         Column(
             Modifier
                 .fillMaxWidth()
+                .lightCardShadow(RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
@@ -372,6 +388,7 @@ private fun PaperclipCard(
         Column(
             Modifier
                 .fillMaxWidth()
+                .lightCardShadow(RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.surface)
                 .border(1.dp, scheme.outline, RoundedCornerShape(14.dp))
@@ -651,11 +668,17 @@ private fun headerRatio(type: ContentType): Float = when (type) {
 // switch: bright pastels on cream in light mode (paper on a desk),
 // muted dark-warm tones on charcoal in dark mode (tinted dark paper).
 
+// Desaturated paper-like tints. The previous values (#F2E5A8 butter etc.)
+// were highlighter-bright on Bone — read as classroom Post-its rather than
+// the Muji "real paper" feel the rest of the palette aims at. Each hue
+// keeps its identity (yellow / green / blue / pink) but the saturation is
+// dialled down ~12% so they read as tinted cream paper, sitting in the
+// same family as the muted dark sticky tints.
 private val StickyNoteTintsLight = listOf(
-    Color(0xFFF2E5A8), // butter
-    Color(0xFFD7E2C5), // mint
-    Color(0xFFC9D7E0), // sky
-    Color(0xFFE8D0CE)  // peach pink
+    Color(0xFFECE0B4), // butter — muted dijon
+    Color(0xFFD3DBC6), // mint — sage-grey
+    Color(0xFFCCD3DA), // sky — paper-blue
+    Color(0xFFDFD0CC)  // peach — washed pink
 )
 
 private val StickyNoteTintsDark = listOf(

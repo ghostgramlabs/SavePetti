@@ -12,9 +12,13 @@ import androidx.compose.ui.graphics.Color
 // jewel tones, which read as "Figma kit" the moment you see them.
 
 // ── Paper base ────────────────────────────────────────────────────────────
+// Background-to-surface contrast was previously too tight (only 8 luminance
+// units apart), so cards on Bone read as "one beige sheet." Bumped PaperOff
+// brighter and pushed PaperEdge darker so cards visibly lift off the page
+// and hairline borders are actually visible against the paper texture.
 val Bone = Color(0xFFF0EBE2)        // background — warm off-white, not pure
-val PaperOff = Color(0xFFF8F4EC)    // surface — slightly lifted from Bone
-val PaperEdge = Color(0xFFE6DFD2)   // outline / hairlines on light paper
+val PaperOff = Color(0xFFFBF8F2)    // surface — meaningfully brighter than Bone
+val PaperEdge = Color(0xFFD6CCBA)   // outline / hairlines — visible on Bone now
 
 // ── Ink ───────────────────────────────────────────────────────────────────
 val Soot = Color(0xFF1F1D1A)        // primary text — warm near-black

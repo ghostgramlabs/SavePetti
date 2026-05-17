@@ -63,6 +63,43 @@ class SettingsViewModel @Inject constructor(
             onCreated?.invoke(entity)
         }
 
+    /**
+     * Update an existing user-created collection. Built-in collections
+     * are intentionally locked here so the Settings flow can't bypass
+     * the same guard the Browse flow already enforces in
+     * [CategoriesViewModel.updateSelectedCategory]. Silently no-ops on
+     * built-ins rather than throwing — the calling UI should already
+     * prevent the user from reaching this for non-user-created rows.
+     */
+    fun updateCollection(
+        category: CategoryEntity,
+        name: String,
+        emoji: String,
+        colorHex: Long,
+        onDone: ((CategoryEntity) -> Unit)? = null
+    ) = viewModelScope.launch {
+        if (!category.userCreated || name.isBlank()) return@launch
+        val updated = category.copy(
+            name = name.trim().take(28),
+            emoji = emoji,
+            colorHex = colorHex
+        )
+        repo.upsertCategory(updated)
+        onDone?.invoke(updated)
+    }
+
+    /**
+     * Delete a user-created collection. Saves inside it stay in the
+     * library (their category_id becomes null) — same behaviour as the
+     * Browse-side delete dialog.
+     */
+    fun deleteCollection(category: CategoryEntity, onDone: (() -> Unit)? = null) =
+        viewModelScope.launch {
+            if (!category.userCreated) return@launch
+            repo.deleteCategory(category.id)
+            onDone?.invoke()
+        }
+
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 
     suspend fun exportBackupZipFile(): Pair<File, SaveRepository.BackupExportResult> {

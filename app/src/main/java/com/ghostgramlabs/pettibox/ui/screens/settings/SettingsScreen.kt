@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,8 +41,10 @@ import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -72,6 +75,7 @@ import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
+import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.mutableStateOf
@@ -107,8 +111,63 @@ fun SettingsScreen(
     )
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
     var showCreateCollection by remember { mutableStateOf(false) }
+    var editingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
+    var deletingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var showHelpDetails by remember { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
+
+    editingCollection?.let { target ->
+        EditCollectionDialog(
+            category = target,
+            onDismiss = { editingCollection = null },
+            onSave = { name, emoji, colorHex ->
+                editingCollection = null
+                viewModel.updateCollection(target, name, emoji, colorHex) { updated ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Updated ${updated.emoji} ${updated.name}")
+                    }
+                }
+            },
+            // Delete from inside the edit dialog is the conventional
+            // "settings → edit thing → trash" path. We confirm via a
+            // separate AlertDialog so an accidental tap doesn't nuke a
+            // collection (and its saves' category links) silently.
+            onDelete = if (target.userCreated) {
+                {
+                    editingCollection = null
+                    deletingCollection = target
+                }
+            } else null
+        )
+    }
+
+    deletingCollection?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deletingCollection = null },
+            title = { Text("Delete ${target.name}?") },
+            text = {
+                Text(
+                    "Saves in this collection will stay in PettiBox — they'll just no longer belong to a collection. You can move them somewhere else from each save's detail screen."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = target.name
+                    val emoji = target.emoji
+                    deletingCollection = null
+                    viewModel.deleteCollection(target) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Deleted $emoji $name")
+                        }
+                    }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingCollection = null }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
     if (showCreateCollection) {
         CreateCollectionDialog(
             onCreate = { newCollection ->
@@ -215,7 +274,8 @@ fun SettingsScreen(
             SettingsSection(title = "Collections") {
                 CollectionsManager(
                     collections = collections,
-                    onCreateClick = { showCreateCollection = true }
+                    onCreateClick = { showCreateCollection = true },
+                    onEditCollection = { editingCollection = it }
                 )
             }
 
@@ -787,13 +847,14 @@ private fun PageLimitChoice(
 @Composable
 private fun CollectionsManager(
     collections: List<CategoryEntity>,
-    onCreateClick: () -> Unit
+    onCreateClick: () -> Unit,
+    onEditCollection: (CategoryEntity) -> Unit
 ) {
     Text(
         if (collections.isEmpty()) {
             "Group saves into collections — \"Recipes\", \"Read later\", anything that fits."
         } else {
-            "You have ${collections.size} collection${if (collections.size == 1) "" else "s"}. Edit or delete them from Browse."
+            "You have ${collections.size} collection${if (collections.size == 1) "" else "s"}. Tap one to rename or delete."
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -816,11 +877,16 @@ private fun CollectionsManager(
             modifier = Modifier.fillMaxWidth()
         ) {
             ordered.forEach { c ->
+                // Every chip is tappable — built-ins open the dialog in
+                // its read-only "Built-in collection" variant; user-made
+                // ones open the editable variant with a Delete option.
+                // Single mental model: tap to manage.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(androidx.compose.ui.graphics.Color(c.colorHex).copy(alpha = 0.16f))
+                        .clickable { onEditCollection(c) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(c.emoji, style = MaterialTheme.typography.labelLarge)

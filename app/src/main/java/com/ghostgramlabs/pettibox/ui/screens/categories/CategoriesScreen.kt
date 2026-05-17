@@ -76,6 +76,7 @@ import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
+import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.toLongHex
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -791,79 +792,6 @@ private fun CategoryTile(c: CategoryEntity, count: Int, tilt: Float, onClick: ()
     }
 }
 
-@Composable
-private fun EditCollectionDialog(
-    category: CategoryEntity,
-    onDismiss: () -> Unit,
-    onSave: (String, String, Long) -> Unit
-) {
-    var name by remember(category.id) { mutableStateOf(category.name) }
-    var emoji by remember(category.id) { mutableStateOf(category.emoji) }
-    var color by remember(category.id) { mutableStateOf(Color(category.colorHex)) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit collection") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it.take(28) },
-                    placeholder = { Text("Collection name") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("Emoji", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(CollectionEmojiSeeds) { e ->
-                        Box(
-                            Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (e == emoji) color.copy(alpha = 0.18f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                .clickable { emoji = e },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(e, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Color", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(CollectionColorSeeds) { c ->
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(c)
-                                .border(
-                                    width = if (c == color) 3.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    shape = RoundedCornerShape(14.dp)
-                                )
-                                .clickable { color = c }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank(),
-                onClick = { onSave(name, emoji, color.toLongHex()) }
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        shape = RoundedCornerShape(24.dp)
-    )
-}
+// EditCollectionDialog moved to components/EditCollectionDialog.kt so
+// Settings can open the same dialog without duplicating the rename /
+// emoji / color UX. Imported above.
