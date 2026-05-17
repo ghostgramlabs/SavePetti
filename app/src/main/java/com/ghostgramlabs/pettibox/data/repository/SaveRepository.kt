@@ -47,7 +47,11 @@ class SaveRepository @Inject constructor(
     data class BackupExportResult(
         val saves: Int,
         val attachments: Int,
-        val embeddedFiles: Int
+        val embeddedFiles: Int,
+        val favorites: Int,
+        val archived: Int,
+        val tags: Int,
+        val tagLinks: Int
     )
 
     suspend fun seedCategoriesIfEmpty() {
@@ -155,11 +159,17 @@ class SaveRepository @Inject constructor(
     suspend fun deleteCategory(id: String) = categoryDao.delete(id)
 
     suspend fun exportBackupJson(): String {
+        val categories = categoryDao.allForExport()
+        val saves = saveDao.allForExport()
+        val attachments = attachmentDao.allForExport()
+        val tags = tagDao.allForExport()
+        val itemTags = tagDao.linksForExport()
         val root = JSONObject()
             .put("schema", 1)
             .put("exportedAt", System.currentTimeMillis())
+            .put("summary", backupSummary(saves, attachments, tags, itemTags))
         root.put("categories", JSONArray().apply {
-            categoryDao.allForExport().forEach { c ->
+            categories.forEach { c ->
                 put(JSONObject()
                     .put("id", c.id)
                     .put("name", c.name)
@@ -172,7 +182,7 @@ class SaveRepository @Inject constructor(
             }
         })
         root.put("saves", JSONArray().apply {
-            saveDao.allForExport().forEach { s ->
+            saves.forEach { s ->
                 put(JSONObject()
                     .put("id", s.id)
                     .put("title", s.title)
@@ -185,6 +195,9 @@ class SaveRepository @Inject constructor(
                     .put("notes", s.notes)
                     .put("ocrText", s.ocrText)
                     .put("metadataJson", s.metadataJson)
+                    .put("isFavorite", s.isFavorite)
+                    .put("isPinned", s.isPinned)
+                    .put("isArchived", s.isArchived)
                     .put("favorite", s.isFavorite)
                     .put("pinned", s.isPinned)
                     .put("archived", s.isArchived)
@@ -195,7 +208,7 @@ class SaveRepository @Inject constructor(
             }
         })
         root.put("attachments", JSONArray().apply {
-            attachmentDao.allForExport().forEach { a ->
+            attachments.forEach { a ->
                 put(JSONObject()
                     .put("id", a.id)
                     .put("itemId", a.itemId)
@@ -207,12 +220,12 @@ class SaveRepository @Inject constructor(
             }
         })
         root.put("tags", JSONArray().apply {
-            tagDao.allForExport().forEach { t ->
+            tags.forEach { t ->
                 put(JSONObject().put("id", t.id).put("name", t.name).put("createdAt", t.createdAt))
             }
         })
         root.put("itemTags", JSONArray().apply {
-            tagDao.linksForExport().forEach { ref ->
+            itemTags.forEach { ref ->
                 put(JSONObject().put("itemId", ref.itemId).put("tagId", ref.tagId))
             }
         })
@@ -230,6 +243,7 @@ class SaveRepository @Inject constructor(
         val root = JSONObject()
             .put("schema", 2)
             .put("exportedAt", System.currentTimeMillis())
+            .put("summary", backupSummary(saves, attachments, tags, itemTags))
 
         targetFile.parentFile?.mkdirs()
         ZipOutputStream(targetFile.outputStream().buffered()).use { zip ->
@@ -269,6 +283,9 @@ class SaveRepository @Inject constructor(
                         .put("notes", s.notes)
                         .put("ocrText", s.ocrText)
                         .put("metadataJson", s.metadataJson)
+                        .put("isFavorite", s.isFavorite)
+                        .put("isPinned", s.isPinned)
+                        .put("isArchived", s.isArchived)
                         .put("favorite", s.isFavorite)
                         .put("pinned", s.isPinned)
                         .put("archived", s.isArchived)
@@ -319,7 +336,11 @@ class SaveRepository @Inject constructor(
         return BackupExportResult(
             saves = saves.size,
             attachments = attachments.size,
-            embeddedFiles = embeddedFiles
+            embeddedFiles = embeddedFiles,
+            favorites = saves.count { it.isFavorite },
+            archived = saves.count { it.isArchived },
+            tags = tags.size,
+            tagLinks = itemTags.size
         )
     }
 
@@ -411,9 +432,9 @@ class SaveRepository @Inject constructor(
                 notes = s.optNullableString("notes"),
                 ocrText = s.optNullableString("ocrText"),
                 metadataJson = s.optNullableString("metadataJson"),
-                isFavorite = s.optBoolean("favorite", false),
-                isPinned = s.optBoolean("pinned", false),
-                isArchived = s.optBoolean("archived", false),
+                isFavorite = s.optBoolean("isFavorite", s.optBoolean("favorite", false)),
+                isPinned = s.optBoolean("isPinned", s.optBoolean("pinned", false)),
+                isArchived = s.optBoolean("isArchived", s.optBoolean("archived", false)),
                 remindAt = s.optNullableLong("remindAt"),
                 createdAt = s.optLong("createdAt", System.currentTimeMillis()),
                 updatedAt = s.optLong("updatedAt", System.currentTimeMillis()),
@@ -536,6 +557,21 @@ class SaveRepository @Inject constructor(
         if (tokens.isEmpty()) return ""
         return tokens.joinToString(" ") { "$it*" }
     }
+
+    private fun backupSummary(
+        saves: List<SaveItemEntity>,
+        attachments: List<AttachmentEntity>,
+        tags: List<TagEntity>,
+        itemTags: List<ItemTagCrossRef>
+    ): JSONObject = JSONObject()
+        .put("saves", saves.size)
+        .put("attachments", attachments.size)
+        .put("favorites", saves.count { it.isFavorite })
+        .put("pinned", saves.count { it.isPinned })
+        .put("archived", saves.count { it.isArchived })
+        .put("reminders", saves.count { it.remindAt != null })
+        .put("tags", tags.size)
+        .put("tagLinks", itemTags.size)
 
     private fun safeExt(uri: String): String {
         val clean = uri.substringBefore('?').substringAfterLast('/', uri).substringAfterLast('.', "bin")

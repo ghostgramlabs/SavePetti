@@ -74,6 +74,7 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
+import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
@@ -640,7 +641,7 @@ fun SettingsScreen(
                             runCatching { viewModel.createLocalBackupNow() }
                                 .onSuccess { (_, result) ->
                                     snackbarHostState.showSnackbar(
-                                        "Local backup saved in PettiBox backups with ${result.saves} saves and ${result.embeddedFiles} files"
+                                        backupSummaryMessage("Local backup saved", result)
                                     )
                                 }
                                 .onFailure {
@@ -667,7 +668,7 @@ fun SettingsScreen(
                                         snackbarHostState.showSnackbar("Couldn't export backup")
                                     } else {
                                         snackbarHostState.showSnackbar(
-                                            "Backup includes ${result.saves} saves and ${result.embeddedFiles} files"
+                                            backupSummaryMessage("Backup includes", result)
                                         )
                                     }
                                 }
@@ -1056,6 +1057,19 @@ private fun shareBackupFile(ctx: Context, file: File): Boolean {
     return runCatching {
         ctx.startActivity(Intent.createChooser(intent, "Export PettiBox backup"))
     }.isSuccess
+}
+
+private fun backupSummaryMessage(
+    prefix: String,
+    result: SaveRepository.BackupExportResult
+): String {
+    val extras = buildList {
+        if (result.favorites > 0) add("${result.favorites} favorites")
+        if (result.archived > 0) add("${result.archived} archived")
+        if (result.tags > 0) add("${result.tags} tags")
+    }
+    val extraText = if (extras.isEmpty()) "" else ", " + extras.joinToString(", ")
+    return "$prefix ${result.saves} saves, ${result.embeddedFiles} files$extraText"
 }
 
 private fun formatBackupTime(timestamp: Long): String =
