@@ -225,8 +225,15 @@ fun DetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (item == null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Loading...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (state.isLoaded) {
+                MissingSaveState(
+                    onBack = onBack,
+                    modifier = Modifier.padding(padding)
+                )
+            } else {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text("Loading...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             return@Scaffold
         }
@@ -527,6 +534,59 @@ fun DetailScreen(
 
                 Spacer(Modifier.height(48.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun MissingSaveState(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ScreenHeading(
+            title = "Save unavailable",
+            subtitle = "It may have been deleted or moved since this reminder was created.",
+            leading = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                }
+            }
+        )
+        Spacer(Modifier.height(56.dp))
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "?",
+                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "This save is no longer available.",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "You can head back and keep browsing your shelf.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(18.dp))
+        TextButton(onClick = onBack) {
+            Text("Back to PettiBox")
         }
     }
 }

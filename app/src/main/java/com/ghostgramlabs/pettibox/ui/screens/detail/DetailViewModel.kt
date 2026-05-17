@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class DetailState(
+    val isLoaded: Boolean = false,
     val item: SaveItemEntity? = null,
     val category: CategoryEntity? = null,
     val categories: List<CategoryEntity> = emptyList(),
@@ -47,6 +48,7 @@ class DetailViewModel @Inject constructor(
         ocrPreferences.autoScan
     ) { item, cats, atts, tags, ocrEnabled ->
         DetailState(
+            isLoaded = true,
             item = item,
             category = item?.categoryId?.let { cid -> cats.firstOrNull { it.id == cid } },
             categories = cats,
