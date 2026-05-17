@@ -12,6 +12,7 @@ import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
+import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import com.ghostgramlabs.pettibox.ui.components.NewCollection
@@ -37,6 +38,10 @@ class SettingsViewModel @Inject constructor(
     val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
     /** Live category list — drives both the count label and conflict checks. */
     val collections: Flow<List<CategoryEntity>> = repo.observeCategories()
+
+    fun hasExactAlarmPermission(): Boolean = ReminderScheduler.hasExactAlarmPermission(appContext)
+
+    fun openExactAlarmSettings(): Boolean = ReminderScheduler.openExactAlarmSettings(appContext)
 
     /**
      * Create a collection from Settings. Mirrors [SaveSheetViewModel]'s
@@ -115,7 +120,11 @@ class SettingsViewModel @Inject constructor(
         val file = localBackupStore.createBackupFile()
         val result = repo.exportBackupZip(file)
         val status = backupPreferences.status.first()
-        localBackupStore.copyToPickedFolder(file, status.folderUri)
+        if (status.folderUri.isNotBlank()) {
+            val copied = localBackupStore.copyToPickedFolder(file, status.folderUri)
+            if (copied) backupPreferences.clearCopyFailure()
+            else backupPreferences.recordCopyFailure()
+        }
         localBackupStore.pruneOldBackups()
         backupPreferences.recordLocalBackup(file.name, file.lastModified())
         return file to result

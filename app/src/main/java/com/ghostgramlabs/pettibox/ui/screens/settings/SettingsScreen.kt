@@ -115,6 +115,7 @@ fun SettingsScreen(
     var deletingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var showHelpDetails by remember { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
+    var hasExactAlarmPermission by remember { mutableStateOf(viewModel.hasExactAlarmPermission()) }
 
     editingCollection?.let { target ->
         EditCollectionDialog(
@@ -367,6 +368,51 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(16.dp))
+            SettingsSection(title = "Reminders") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.AccessTime,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Exact alarm access",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            if (hasExactAlarmPermission) {
+                                "Reminders can fire at the time you choose."
+                            } else {
+                                "Reminders still fire, but Android may delay them by a few minutes."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (!hasExactAlarmPermission) {
+                    Spacer(Modifier.height(12.dp))
+                    NoticeBanner(
+                        text = "For on-the-dot reminders, allow Alarms & reminders in Android settings.",
+                        action = "Open settings",
+                        onAction = {
+                            if (!viewModel.openExactAlarmSettings()) {
+                                scope.launch { snackbarHostState.showSnackbar("Couldn't open alarm settings") }
+                            }
+                            hasExactAlarmPermission = viewModel.hasExactAlarmPermission()
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Help") {
                 HelpFlow()
                 Spacer(Modifier.height(12.dp))
@@ -517,6 +563,15 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (localBackupStatus.lastCopyFailedAt > 0L) {
+                    Spacer(Modifier.height(10.dp))
+                    NoticeBanner(
+                        text = "PettiBox made a private backup, but couldn't copy it to your selected folder. Pick the folder again if it moved or permissions changed.",
+                        action = "Choose folder",
+                        onAction = { chooseBackupFolder.launch(null) },
+                        isError = true
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Default backup folder (full path)",
@@ -690,6 +745,34 @@ private fun WorkInProgressBanner(label: String) {
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary
         )
+    }
+}
+
+@Composable
+private fun NoticeBanner(
+    text: String,
+    action: String,
+    onAction: () -> Unit,
+    isError: Boolean = false
+) {
+    val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(color.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onAction) {
+            Text(action, color = color)
+        }
     }
 }
 

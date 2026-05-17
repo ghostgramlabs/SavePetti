@@ -336,6 +336,10 @@ private fun StickyNoteCard(
                 Spacer(Modifier.height(8.dp))
                 ReminderPill(remindAt = item.remindAt, accent = accent)
             }
+            if (item.isArchived) {
+                Spacer(Modifier.height(8.dp))
+                ArchivedPill(accent = accent)
+            }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SourceStamp(source = source, accent = ink)
@@ -483,6 +487,10 @@ private fun FooterMeta(
             ReminderPill(remindAt = item.remindAt, accent = accent)
             Spacer(Modifier.height(6.dp))
         }
+        if (item.isArchived) {
+            ArchivedPill(accent = accent)
+            Spacer(Modifier.height(6.dp))
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (categoryEmoji != null && categoryName != null) {
                 Box(
@@ -526,6 +534,19 @@ private fun FooterMeta(
  * Sized for 150 dp-wide cards: "Tomorrow 9am" comfortably fits, longer
  * forms (e.g. "Dec 3 9am") still fit on one line.
  */
+@Composable
+private fun ArchivedPill(accent: Color) {
+    Text(
+        "Archived",
+        style = MaterialTheme.typography.labelSmall,
+        color = accent,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .background(accent.copy(alpha = 0.14f), CircleShape)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
+}
+
 @Composable
 private fun ReminderPill(remindAt: Long, accent: Color) {
     Row(

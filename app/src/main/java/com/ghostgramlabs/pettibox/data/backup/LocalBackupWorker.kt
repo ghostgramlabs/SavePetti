@@ -40,7 +40,8 @@ class LocalBackupWorker @AssistedInject constructor(
             // backup target.
             if (status.folderUri.isNotBlank()) {
                 val copied = backupStore.copyToPickedFolder(file, status.folderUri)
-                if (!copied) backupPreferences.recordCopyFailure()
+                if (copied) backupPreferences.clearCopyFailure()
+                else backupPreferences.recordCopyFailure()
             }
             backupStore.pruneOldBackups()
             backupPreferences.recordLocalBackup(file.name, file.lastModified())

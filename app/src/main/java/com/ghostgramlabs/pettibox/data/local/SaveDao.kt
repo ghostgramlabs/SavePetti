@@ -85,6 +85,7 @@ interface SaveDao {
         ORDER BY is_pinned DESC,
             CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
             CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' AND remind_at IS NULL THEN 1 ELSE 0 END ASC,
             CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
             created_at DESC
         """
@@ -102,6 +103,7 @@ interface SaveDao {
         ORDER BY is_pinned DESC,
             CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
             CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' AND remind_at IS NULL THEN 1 ELSE 0 END ASC,
             CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
             created_at DESC
         """
@@ -125,6 +127,7 @@ interface SaveDao {
         ORDER BY is_pinned DESC,
             CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
             CASE WHEN :sort = 'UPDATED' THEN updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' AND remind_at IS NULL THEN 1 ELSE 0 END ASC,
             CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
             created_at DESC
         """
@@ -145,6 +148,7 @@ interface SaveDao {
         ORDER BY
             CASE WHEN :sort = 'OLDEST' THEN created_at END ASC,
             CASE WHEN :sort = 'NEWEST' THEN created_at END DESC,
+            CASE WHEN :sort = 'REMINDER' AND remind_at IS NULL THEN 1 ELSE 0 END ASC,
             CASE WHEN :sort = 'REMINDER' THEN remind_at END ASC,
             updated_at DESC
         """
@@ -161,6 +165,7 @@ interface SaveDao {
         ORDER BY s.is_pinned DESC,
             CASE WHEN :sort = 'OLDEST' THEN s.created_at END ASC,
             CASE WHEN :sort = 'UPDATED' THEN s.updated_at END DESC,
+            CASE WHEN :sort = 'REMINDER' AND s.remind_at IS NULL THEN 1 ELSE 0 END ASC,
             CASE WHEN :sort = 'REMINDER' THEN s.remind_at END ASC,
             s.created_at DESC
         """
@@ -250,6 +255,27 @@ interface SaveDao {
 
     @Query("UPDATE save_items SET ocr_text = :text, updated_at = :ts WHERE id = :id")
     suspend fun setOcrText(id: Long, text: String, ts: Long = System.currentTimeMillis())
+
+    /**
+     * Append OCR text to a row atomically. Used when multiple OcrWorkers
+     * race to merge attachment OCR into the parent item's ocr_text —
+     * the previous read-modify-write at the worker level guaranteed
+     * lost writes when attachments A and B finished simultaneously.
+     * SQL `||` concatenation in a single UPDATE keeps each worker's
+     * contribution.
+     */
+    @Query(
+        """
+        UPDATE save_items
+        SET ocr_text = CASE
+                WHEN ocr_text IS NULL OR ocr_text = '' THEN :text
+                ELSE ocr_text || char(10) || char(10) || :text
+            END,
+            updated_at = :ts
+        WHERE id = :id
+        """
+    )
+    suspend fun appendOcrText(id: Long, text: String, ts: Long = System.currentTimeMillis())
 
     // ── FTS search ───────────────────────────────────────────────────────
 

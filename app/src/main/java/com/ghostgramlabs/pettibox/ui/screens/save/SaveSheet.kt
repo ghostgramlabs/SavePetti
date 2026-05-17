@@ -123,7 +123,7 @@ fun SaveSheet(
         )
     }
 
-    LaunchedEffect(Unit) { viewModel.ingest(incoming) }
+    LaunchedEffect(incoming) { viewModel.ingest(incoming) }
     // Deliberately not auto-focusing the title - the primary action is
     // picking a collection. The user opens the sheet, taps a chip, taps Save.
     // Editing the title or adding a note is an optional second step that

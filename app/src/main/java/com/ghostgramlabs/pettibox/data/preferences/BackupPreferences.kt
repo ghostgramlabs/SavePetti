@@ -56,10 +56,6 @@ class BackupPreferences @Inject constructor(
         context.backupDataStore.edit { prefs ->
             prefs[lastBackupAtKey] = timestamp
             prefs[lastBackupNameKey] = fileName
-            // A fresh successful local backup clears any prior copy-failure
-            // marker — the user picking a new folder or granting permission
-            // self-heals the warning.
-            prefs.remove(lastCopyFailedAtKey)
         }
     }
 
@@ -72,6 +68,13 @@ class BackupPreferences @Inject constructor(
     suspend fun setBackupFolder(uri: String) {
         context.backupDataStore.edit { prefs ->
             prefs[backupFolderUriKey] = uri
+            prefs.remove(lastCopyFailedAtKey)
+        }
+    }
+
+    suspend fun clearCopyFailure() {
+        context.backupDataStore.edit { prefs ->
+            prefs.remove(lastCopyFailedAtKey)
         }
     }
 }

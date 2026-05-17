@@ -136,6 +136,7 @@ class SaveRepository @Inject constructor(
     suspend fun dueOrPendingReminders(): List<SaveItemEntity> = saveDao.pendingReminders()
     suspend fun touchOpened(id: Long) = saveDao.touchOpened(id)
     suspend fun setOcrText(id: Long, text: String) = saveDao.setOcrText(id, text)
+    suspend fun appendOcrText(id: Long, text: String) = saveDao.appendOcrText(id, text)
 
     suspend fun imageItemsNeedingOcr(): List<SaveItemEntity> = saveDao.imageItemsNeedingOcr()
     suspend fun pdfItemsNeedingOcr(): List<SaveItemEntity> = saveDao.pdfItemsNeedingOcr()

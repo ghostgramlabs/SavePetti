@@ -1,5 +1,6 @@
 package com.ghostgramlabs.pettibox.data.reminders
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.ghostgramlabs.pettibox.MainActivity
+import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +35,7 @@ import javax.inject.Inject
 class ReminderAlarmReceiver : BroadcastReceiver() {
 
     @Inject lateinit var repository: SaveRepository
+    @Inject lateinit var reminderPreferences: ReminderPreferences
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ReminderScheduler.ACTION_FIRE) return
@@ -70,7 +73,22 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         repository.setRemindAt(itemId, null)
     }
 
-    private fun postNotification(ctx: Context, itemId: Long, title: String) {
+    private suspend fun postNotification(ctx: Context, itemId: Long, title: String) {
+        val nm = NotificationManagerCompat.from(ctx)
+        // Skip the post entirely when notifications are off for the app
+        // (Android 13+ runtime permission revoked, channel disabled, or
+        // the user globally muted us). The previous runCatching wrapper
+        // hid the SecurityException but still left the user expecting a
+        // notification that never arrived; explicitly bailing means we
+        // can hook a recovery surface here later (e.g. setting a
+        // preference that drives a Home banner). Lint's MissingPermission
+        // error is silenced because the call is gated by the runtime
+        // check this method now performs.
+        if (!nm.areNotificationsEnabled()) {
+            reminderPreferences.setNotificationsBlocked(true)
+            return
+        }
+        reminderPreferences.setNotificationsBlocked(false)
         val openIntent = Intent(ctx, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra(EXTRA_OPEN_ITEM_ID, itemId)
@@ -91,7 +109,8 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
         runCatching {
-            NotificationManagerCompat.from(ctx).notify(itemId.toInt(), notif)
+            @SuppressLint("MissingPermission")
+            nm.notify(itemId.toInt(), notif)
         }
     }
 

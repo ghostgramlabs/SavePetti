@@ -79,12 +79,25 @@ private val topTabs = listOf(
 @Composable
 fun PettiBoxNavGraph(
     themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit
+    onThemeModeChange: (ThemeMode) -> Unit,
+    initialOpenItemId: Long? = null,
+    onInitialOpenItemConsumed: () -> Unit = {}
 ) {
     val nav = rememberNavController()
     val backStackEntry by nav.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
     val showBottomBar = topTabs.any { it.matches(currentRoute) }
+
+    // Reminder-tap deep link. When the user taps a notification, the
+    // activity stashes the item id and re-renders; this effect picks it
+    // up once the NavController has actually composed and routes to the
+    // item's Detail screen. Without this, the notification opens to Home
+    // and the user has to hunt for the save they were just nudged about.
+    androidx.compose.runtime.LaunchedEffect(initialOpenItemId) {
+        val id = initialOpenItemId ?: return@LaunchedEffect
+        nav.navigate(Routes.detail(id))
+        onInitialOpenItemConsumed()
+    }
 
     Scaffold(
         bottomBar = {

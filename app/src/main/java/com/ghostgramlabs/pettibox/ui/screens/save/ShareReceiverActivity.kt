@@ -5,6 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.ghostgramlabs.pettibox.ui.theme.PettiBoxTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -15,6 +18,7 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class ShareReceiverActivity : ComponentActivity() {
+    private var incomingShare by mutableStateOf<IncomingShare?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,14 +28,17 @@ class ShareReceiverActivity : ComponentActivity() {
         if (!incoming.hasAnything) {
             finish(); return
         }
+        incomingShare = incoming
 
         setContent {
-            PettiBoxTheme {
-                SaveSheet(
-                    incoming = incoming,
-                    onDismiss = { finish() },
-                    onSaved = { finish() }
-                )
+            incomingShare?.let { share ->
+                PettiBoxTheme {
+                    SaveSheet(
+                        incoming = share,
+                        onDismiss = { finish() },
+                        onSaved = { finish() }
+                    )
+                }
             }
         }
     }
@@ -39,6 +46,11 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        recreate()
+        val incoming = IncomingShare.from(intent)
+        if (!incoming.hasAnything) {
+            finish()
+        } else {
+            incomingShare = incoming
+        }
     }
 }

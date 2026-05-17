@@ -82,6 +82,34 @@ object ReminderScheduler {
     }
 
     /**
+     * Whether the OS will let us schedule exact alarms right now. On
+     * API < 31 always returns true (no permission needed). On 31+ it
+     * reflects the user's grant of SCHEDULE_EXACT_ALARM — false means
+     * reminders fall back to setAndAllowWhileIdle (Doze-resilient but
+     * can fire several minutes late).
+     */
+    fun hasExactAlarmPermission(ctx: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val am = ContextCompat.getSystemService(ctx, AlarmManager::class.java) ?: return false
+        return am.canScheduleExactAlarms()
+    }
+
+    /**
+     * Opens the system "Alarms & reminders" special-access page for our
+     * app. Caller should wrap in runCatching — on some OEM builds the
+     * intent isn't resolvable and we'd crash. Returns true if the intent
+     * was launched.
+     */
+    fun openExactAlarmSettings(ctx: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        val intent = Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = android.net.Uri.parse("package:${ctx.packageName}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return runCatching { ctx.startActivity(intent) }.isSuccess
+    }
+
+    /**
      * Re-arms every pending reminder. Called on cold start (the existing
      * PettiBoxApp reconciliation) and on BOOT_COMPLETED. Past-due
      * reminders are scheduled at `now` so we fire them immediately —

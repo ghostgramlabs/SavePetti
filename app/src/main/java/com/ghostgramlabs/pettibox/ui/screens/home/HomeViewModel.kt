@@ -9,6 +9,7 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorkTags
 import com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences
+import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
 import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
@@ -43,6 +44,7 @@ data class HomeState(
     // "you've archived everything" (totalCount = 0 AND archivedCount > 0).
     val archivedCount: Int = 0,
     val isIndexingText: Boolean = false,
+    val notificationsBlocked: Boolean = false,
     val showOnboarding: Boolean = false
 )
 
@@ -50,6 +52,7 @@ data class HomeState(
 class HomeViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val onboardingPreferences: OnboardingPreferences,
+    private val reminderPreferences: ReminderPreferences,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     private val isTextIndexing = textIndexingFlow(appContext)
@@ -68,6 +71,7 @@ class HomeViewModel @Inject constructor(
         repo.observeTotal(),
         repo.observeArchivedTotal(),
         isTextIndexing,
+        reminderPreferences.notificationsBlocked,
         onboardingPreferences.showHomeOnboarding
     ) { args ->
         // combine(vararg) returns Array<Any?> at runtime — the per-cast
@@ -87,7 +91,8 @@ class HomeViewModel @Inject constructor(
         val total = args[5] as Int
         val archived = args[6] as Int
         val indexing = args[7] as Boolean
-        val showOnboarding = args[8] as Boolean
+        val notificationsBlocked = args[8] as Boolean
+        val showOnboarding = args[9] as Boolean
 
         val sources = rawCounts.mapNotNull { sc ->
             val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
@@ -104,6 +109,7 @@ class HomeViewModel @Inject constructor(
             totalCount = total,
             archivedCount = archived,
             isIndexingText = indexing,
+            notificationsBlocked = notificationsBlocked,
             showOnboarding = showOnboarding
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
@@ -143,6 +149,10 @@ class HomeViewModel @Inject constructor(
 
     fun completeOnboarding() = viewModelScope.launch {
         onboardingPreferences.markHomeOnboardingComplete()
+    }
+
+    fun clearNotificationWarning() = viewModelScope.launch {
+        reminderPreferences.setNotificationsBlocked(false)
     }
 }
 

@@ -47,10 +47,9 @@ class OcrWorker @AssistedInject constructor(
             if (text.isNotBlank()) {
                 if (attachmentId > 0L) {
                     repository.setAttachmentOcr(attachmentId, text)
-                    // Merge into parent so FTS sees everything in one row
-                    val existing = repository.getById(itemId)?.ocrText.orEmpty()
-                    val merged = if (existing.isBlank()) text else "$existing\n\n$text"
-                    repository.setOcrText(itemId, merged)
+                    // Merge atomically into parent so concurrent OCR workers
+                    // for multi-image saves cannot overwrite each other.
+                    repository.appendOcrText(itemId, text)
                 } else {
                     repository.setOcrText(itemId, text)
                 }

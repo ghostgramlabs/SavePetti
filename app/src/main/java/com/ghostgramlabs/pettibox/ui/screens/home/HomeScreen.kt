@@ -2,7 +2,9 @@ package com.ghostgramlabs.pettibox.ui.screens.home
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -335,6 +337,22 @@ fun HomeScreen(
                         Spacer(Modifier.height(10.dp))
                         IndexingStatusChip(modifier = Modifier.padding(horizontal = 20.dp))
                     }
+                    if (state.notificationsBlocked) {
+                        Spacer(Modifier.height(10.dp))
+                        ReminderWarningBanner(
+                            onEnable = {
+                                runCatching {
+                                    ctx.startActivity(
+                                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                        }
+                                    )
+                                }
+                            },
+                            onDismiss = viewModel::clearNotificationWarning,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
                     Spacer(Modifier.height(20.dp))
                     if (state.categories.isNotEmpty()) {
                         // No "See all" trailing — Browse is one tap away in
@@ -426,6 +444,31 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ReminderWarningBanner(
+    onEnable: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(scheme.error.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            "Reminders need notifications turned on.",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = scheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onEnable) { Text("Enable") }
+        TextButton(onClick = onDismiss) { Text("Hide") }
     }
 }
 
