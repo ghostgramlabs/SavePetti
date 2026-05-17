@@ -76,6 +76,7 @@ import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
+import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.mutableStateOf
@@ -764,6 +765,11 @@ private fun NoticeBanner(
             .background(color.copy(alpha = 0.10f))
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
+        KeeperMascot(
+            size = 40.dp,
+            accent = color,
+            modifier = Modifier.padding(end = 10.dp)
+        )
         Text(
             text,
             style = MaterialTheme.typography.bodySmall,

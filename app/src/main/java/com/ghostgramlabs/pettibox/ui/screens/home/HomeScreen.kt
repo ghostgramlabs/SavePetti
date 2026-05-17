@@ -78,6 +78,7 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
+import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
@@ -461,6 +462,11 @@ private fun ReminderWarningBanner(
             .background(scheme.error.copy(alpha = 0.10f))
             .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
+        KeeperMascot(
+            size = 42.dp,
+            accent = scheme.error,
+            modifier = Modifier.padding(end = 10.dp)
+        )
         Text(
             "Reminders need notifications turned on.",
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
@@ -505,15 +511,10 @@ private fun HomeOnboardingDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(current.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
+            KeeperMascot(
+                size = 92.dp,
+                badgeIcon = current.icon
+            )
         },
         title = { Text(current.title, fontWeight = FontWeight.ExtraBold) },
         text = {

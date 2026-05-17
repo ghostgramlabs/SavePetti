@@ -88,6 +88,7 @@ import com.ghostgramlabs.pettibox.data.util.TimeFormat
 import com.ghostgramlabs.pettibox.domain.model.ContentType
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
+import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
@@ -558,20 +559,8 @@ private fun MissingSaveState(
                 }
             }
         )
-        Spacer(Modifier.height(56.dp))
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "?",
-                style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.ExtraBold),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+        Spacer(Modifier.height(48.dp))
+        KeeperMascot(size = 128.dp)
         Spacer(Modifier.height(20.dp))
         Text(
             "This save is no longer available.",
