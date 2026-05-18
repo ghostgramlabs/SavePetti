@@ -167,7 +167,7 @@ private fun PolaroidCard(
                     source = source,
                     accent = accent,
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.BottomStart)
                         .padding(8.dp)
                 )
             }
@@ -185,7 +185,7 @@ private fun PolaroidCard(
         if (item.isPinned) PinnedTape(Modifier.align(Alignment.TopStart))
         if (onLongClick != null) CardActionButton(
             onClick = onLongClick,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
         )
     }
 }
@@ -450,19 +450,25 @@ private fun PaperclipCard(
 
 @Composable
 private fun CardActionButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    // 28 dp chip (was 40) so it stops dominating small cards. A hairline
+    // outlineVariant ring keeps the circle legible against pale paper
+    // surfaces (polaroid frame in light mode) where a flat surface fill
+    // would otherwise disappear into the card.
     IconButton(
         onClick = onClick,
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .size(40.dp)
+            .size(28.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .background(scheme.surface.copy(alpha = 0.94f))
+            .border(1.dp, scheme.outlineVariant, CircleShape)
     ) {
         Icon(
             Icons.Rounded.MoreHoriz,
             contentDescription = "Open quick actions",
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(20.dp)
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
         )
     }
 }
