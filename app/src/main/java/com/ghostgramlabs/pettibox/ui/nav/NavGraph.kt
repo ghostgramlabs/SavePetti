@@ -113,7 +113,6 @@ fun PettiBoxNavGraph(
             composable(Routes.Home) {
                 HomeScreen(
                     onOpenItem = { id -> nav.navigate(Routes.detail(id)) },
-                    onOpenSearch = { q -> nav.navigateTopLevel(Routes.search(q)) },
                     onOpenSource = { src -> nav.navigate(Routes.search(src = src)) },
                     onOpenCategory = { cid -> nav.navigate(Routes.categories(cid)) },
                     onOpenAllCategories = { nav.navigateTopLevel(Routes.categories()) }

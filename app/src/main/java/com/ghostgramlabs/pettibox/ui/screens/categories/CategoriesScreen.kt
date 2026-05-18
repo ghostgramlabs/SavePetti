@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.local.TagWithCount
+import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.CollectionColorSeeds
 import com.ghostgramlabs.pettibox.ui.components.CollectionEmojiSeeds
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
@@ -500,8 +501,8 @@ private fun DrillView(
 ) {
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     val title = when (destination) {
-        BrowseDestination.Favorites -> "❤️ Favorites"
-        BrowseDestination.Archive -> "🗃 Archive"
+        BrowseDestination.Favorites -> "Favorites"
+        BrowseDestination.Archive -> "Archive"
         BrowseDestination.Reminders -> "Reminders"
         is BrowseDestination.Tag -> "#${destination.name}"
         is BrowseDestination.Category ->
@@ -695,35 +696,39 @@ private fun DrillView(
  */
 @Composable
 private fun SortStrip(selected: BrowseSort, onSelect: (BrowseSort) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
     LazyRow(
         contentPadding = PaddingValues(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(BrowseSort.entries, key = { it.name }) { sort ->
-            val active = selected == sort
-            val tilt = if (sort.ordinal % 2 == 0) -1.5f else 1.5f
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .rotate(tilt)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        if (active) scheme.primary
-                        else scheme.primary.copy(alpha = 0.10f)
-                    )
-                    .clickable { onSelect(sort) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    sort.label,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (active) Color.White else scheme.primary
-                )
-            }
+            CategoryChip(
+                label = sort.label,
+                emoji = sort.identityMark,
+                color = sort.identityAccent,
+                selected = selected == sort,
+                tilt = if (sort.ordinal % 2 == 0) -1.5f else 1.5f,
+                onClick = { onSelect(sort) }
+            )
         }
     }
 }
+
+private val BrowseSort.identityMark: String
+    get() = when (this) {
+        BrowseSort.NEWEST -> "↓"
+        BrowseSort.OLDEST -> "↑"
+        BrowseSort.UPDATED -> "✎"
+        BrowseSort.REMINDER -> "⏰"
+    }
+
+private val BrowseSort.identityAccent: Color
+    @Composable
+    get() = when (this) {
+        BrowseSort.NEWEST -> MaterialTheme.colorScheme.secondary
+        BrowseSort.OLDEST -> MaterialTheme.colorScheme.tertiary
+        BrowseSort.UPDATED -> Color(0xFF6E7FB8)
+        BrowseSort.REMINDER -> Color(0xFF2F9B8F)
+    }
 
 @Composable
 private fun BulkActionBar(

@@ -86,7 +86,6 @@ import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import com.ghostgramlabs.pettibox.ui.components.SaveCard
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
-import com.ghostgramlabs.pettibox.ui.components.SearchPill
 import com.ghostgramlabs.pettibox.ui.components.SectionHeader
 import com.ghostgramlabs.pettibox.ui.screens.save.IncomingShare
 import com.ghostgramlabs.pettibox.ui.screens.save.SaveSheet
@@ -94,7 +93,6 @@ import com.ghostgramlabs.pettibox.ui.screens.save.SaveSheet
 @Composable
 fun HomeScreen(
     onOpenItem: (Long) -> Unit,
-    onOpenSearch: (String) -> Unit,
     onOpenSource: (String) -> Unit,
     onOpenCategory: (String) -> Unit,
     onOpenAllCategories: () -> Unit,
@@ -330,11 +328,6 @@ fun HomeScreen(
             item(span = StaggeredGridItemSpan.FullLine) {
                 Column {
                     Greeting()
-                    Spacer(Modifier.height(4.dp))
-                    SearchPill(
-                        onClick = { onOpenSearch("") },
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
                     if (state.isIndexingText) {
                         Spacer(Modifier.height(10.dp))
                         IndexingStatusChip(modifier = Modifier.padding(horizontal = 20.dp))
