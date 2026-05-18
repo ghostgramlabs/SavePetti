@@ -5,11 +5,17 @@ import com.ghostgramlabs.pettibox.ui.theme.BeautyPink
 import com.ghostgramlabs.pettibox.ui.theme.FinanceEmerald
 import com.ghostgramlabs.pettibox.ui.theme.FitnessIndigo
 import com.ghostgramlabs.pettibox.ui.theme.HomePurple
+import com.ghostgramlabs.pettibox.ui.theme.IdeasMustard
 import com.ghostgramlabs.pettibox.ui.theme.MusicCoral
+import com.ghostgramlabs.pettibox.ui.theme.PersonalPink
 import com.ghostgramlabs.pettibox.ui.theme.ReadLaterSky
+import com.ghostgramlabs.pettibox.ui.theme.ReadingForest
 import com.ghostgramlabs.pettibox.ui.theme.RecipeOrange
+import com.ghostgramlabs.pettibox.ui.theme.ShoppingOrange
 import com.ghostgramlabs.pettibox.ui.theme.StyleAmber
 import com.ghostgramlabs.pettibox.ui.theme.TravelTeal
+import com.ghostgramlabs.pettibox.ui.theme.WatchPlum
+import com.ghostgramlabs.pettibox.ui.theme.WorkIndigo
 
 data class CategoryPreset(
     val id: String,
@@ -19,7 +25,10 @@ data class CategoryPreset(
 )
 
 object CategoryPalette {
-    // Mirrors the reference app's category strip exactly.
+    // Broad starter taxonomy for the save patterns people actually have:
+    // things to watch/read, things to buy, life admin, inspiration, and
+    // personal plans. Kept finite on purpose; the app should feel helpful,
+    // not like it shipped with a pre-filled filing cabinet.
     val Defaults: List<CategoryPreset> = listOf(
         CategoryPreset("recipes",    "Recipes",    "\uD83C\uDF73", RecipeOrange.toLongHex()),
         CategoryPreset("travel",     "Travel",     "\u2708\uFE0F", TravelTeal.toLongHex()),
@@ -29,7 +38,20 @@ object CategoryPalette {
         CategoryPreset("beauty",     "Beauty",     "\uD83D\uDC84", BeautyPink.toLongHex()),
         CategoryPreset("read_later", "Read Later", "\uD83D\uDCD6", ReadLaterSky.toLongHex()),
         CategoryPreset("finance",    "Finance",    "\uD83D\uDCB0", FinanceEmerald.toLongHex()),
-        CategoryPreset("music",      "Music",      "\uD83C\uDFB5", MusicCoral.toLongHex())
+        CategoryPreset("music",      "Music",      "\uD83C\uDFB5", MusicCoral.toLongHex()),
+        CategoryPreset("shopping",   "Shopping",   "\uD83D\uDECD\uFE0F", ShoppingOrange.toLongHex()),
+        CategoryPreset("work",       "Work",       "\uD83D\uDCBC", WorkIndigo.toLongHex()),
+        CategoryPreset("ideas",      "Ideas",      "\uD83D\uDCA1", IdeasMustard.toLongHex()),
+        CategoryPreset("watch",      "Watch",      "\uD83C\uDFAC", WatchPlum.toLongHex()),
+        CategoryPreset("learning",   "Learning",   "\uD83C\uDF93", ReadingForest.toLongHex()),
+        CategoryPreset("health",     "Health",     "\uD83E\uDE7A", FitnessIndigo.toLongHex()),
+        CategoryPreset("docs",       "Docs",       "\uD83D\uDCC4", ReadLaterSky.toLongHex()),
+        CategoryPreset("personal",   "Personal",   "\uD83D\uDCDD", PersonalPink.toLongHex()),
+        CategoryPreset("tech",       "Tech",       "\uD83D\uDCBB", WorkIndigo.toLongHex()),
+        CategoryPreset("design",     "Design",     "\uD83C\uDFA8", StyleAmber.toLongHex()),
+        CategoryPreset("gifts",      "Gifts",      "\uD83C\uDF81", BeautyPink.toLongHex()),
+        CategoryPreset("places",     "Places",     "\uD83D\uDCCD", TravelTeal.toLongHex()),
+        CategoryPreset("kids",       "Kids",       "\uD83E\uDDF8", HomePurple.toLongHex())
     )
 
     fun colorOf(hex: Long): Color = Color(hex)

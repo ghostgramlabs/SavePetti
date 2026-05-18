@@ -929,14 +929,10 @@ private fun PageLimitChoice(
 }
 
 /**
- * Compact in-Settings collection manager. Renders the live count plus a
- * preview of up to four existing collections (emoji + name) so the user
- * sees what they already have before deciding to add another, and a
- * primary "Create a collection" CTA that opens [CreateCollectionDialog].
- *
- * Editing and deleting collections still happens inside Browse (drill in,
- * use the pencil / trash actions on user-created collections) — we do
- * not duplicate that surface here.
+ * Compact in-Settings collection manager. Settings is only for custom
+ * collections the user can manage; built-in starter collections stay in
+ * Browse and in the save sheet, where they behave like stable system
+ * shortcuts instead of editable settings rows.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -945,37 +941,28 @@ private fun CollectionsManager(
     onCreateClick: () -> Unit,
     onEditCollection: (CategoryEntity) -> Unit
 ) {
+    val customCollections = remember(collections) {
+        collections
+            .filter { it.userCreated }
+            .sortedByDescending { it.createdAt }
+    }
     Text(
-        if (collections.isEmpty()) {
-            "Group saves into collections — \"Recipes\", \"Read later\", anything that fits."
+        if (customCollections.isEmpty()) {
+            "Starter collections are ready in Browse. Create your own only when you need a personal shelf like \"Trip ideas\" or \"Client work\"."
         } else {
-            "You have ${collections.size} collection${if (collections.size == 1) "" else "s"}. Tap one to rename or delete."
+            "You have ${customCollections.size} custom collection${if (customCollections.size == 1) "" else "s"}. Tap one to rename or delete."
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    if (collections.isNotEmpty()) {
+    if (customCollections.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
-        // Show ALL collections, newest first. Was capped at the first 4
-        // by sortOrder, which hid every newly-created collection (new
-        // ones get the highest sortOrder and end up past index 4) — the
-        // exact symptom: "I just made one and it doesn't show up." Also
-        // the previous Row{...} overflowed the screen edge when total
-        // chip width exceeded available space; FlowRow wraps to a second
-        // / third line so the entire list is visible.
-        val ordered = remember(collections) {
-            collections.sortedByDescending { it.createdAt }
-        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            ordered.forEach { c ->
-                // Every chip is tappable — built-ins open the dialog in
-                // its read-only "Built-in collection" variant; user-made
-                // ones open the editable variant with a Delete option.
-                // Single mental model: tap to manage.
+            customCollections.forEach { c ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
