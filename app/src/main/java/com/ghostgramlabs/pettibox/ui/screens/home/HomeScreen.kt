@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Image
@@ -107,6 +108,18 @@ fun HomeScreen(
     // the underlying list changes.
     val categoriesById = remember(state.categories) {
         state.categories.associateBy { it.id }
+    }
+    var collectionQuery by remember { mutableStateOf("") }
+    val visibleBrowseCategories = remember(state.categories, collectionQuery) {
+        val query = collectionQuery.trim()
+        if (query.isBlank()) {
+            state.categories
+        } else {
+            state.categories.filter { category ->
+                category.name.contains(query, ignoreCase = true) ||
+                    category.emoji.contains(query)
+            }
+        }
     }
 
     // Routing state for the manual-add flow. The chooser sheet sets one of
@@ -358,10 +371,26 @@ fun HomeScreen(
                             subtitle = "Tap a vibe to explore"
                         )
                         Spacer(Modifier.height(10.dp))
+                        if (state.categories.size > 8) {
+                            HomeCollectionFinder(
+                                query = collectionQuery,
+                                onQueryChange = { collectionQuery = it },
+                                modifier = Modifier.padding(horizontal = 20.dp)
+                            )
+                            Spacer(Modifier.height(10.dp))
+                        }
                         CategoryStrip(
-                            categories = state.categories,
+                            categories = visibleBrowseCategories,
                             onClickCategory = onOpenCategory
                         )
+                        if (visibleBrowseCategories.isEmpty()) {
+                            Text(
+                                "No collection matches \"$collectionQuery\"",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                            )
+                        }
                         Spacer(Modifier.height(20.dp))
                     }
                     if (state.sources.isNotEmpty()) {
@@ -784,6 +813,36 @@ private fun CategoryStrip(
             )
         }
     }
+}
+
+@Composable
+private fun HomeCollectionFinder(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        placeholder = { Text("Find collection") },
+        leadingIcon = {
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                androidx.compose.material3.IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Clear collection filter")
+                }
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
