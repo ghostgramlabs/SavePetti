@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -240,6 +241,18 @@ private fun BrowseGrid(
     onOpenReminders: () -> Unit,
     onOpenTags: () -> Unit
 ) {
+    var collectionQuery by remember { mutableStateOf("") }
+    val visibleCategories = remember(state.categories, collectionQuery) {
+        val query = collectionQuery.trim()
+        if (query.isBlank()) {
+            state.categories
+        } else {
+            state.categories.filter { category ->
+                category.name.contains(query, ignoreCase = true) ||
+                    category.emoji.contains(query)
+            }
+        }
+    }
     ScreenHeading(
         title = "Browse"
     )
@@ -299,6 +312,11 @@ private fun BrowseGrid(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
                 )
+                CollectionFinder(
+                    query = collectionQuery,
+                    onQueryChange = { collectionQuery = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
         // Use the count-based overload here because the file has three
@@ -306,11 +324,11 @@ private fun BrowseGrid(
         // LazyStaggeredGrid) and Kotlin can't disambiguate a List<T>
         // overload at this call site without an explicit type ascription.
         items(
-            count = state.categories.size,
-            key = { idx -> state.categories[idx].id },
+            count = visibleCategories.size,
+            key = { idx -> visibleCategories[idx].id },
             contentType = { "category" }
         ) { idx ->
-            val c = state.categories[idx]
+            val c = visibleCategories[idx]
             val tilt = if (c.sortOrder % 2 == 0) -1f else 1f
             CategoryTile(
                 c = c,
@@ -319,7 +337,47 @@ private fun BrowseGrid(
                 onClick = { onSelectCategory(c.id) }
             )
         }
+        if (visibleCategories.isEmpty()) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Text(
+                    "No collection matches \"$collectionQuery\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp)
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun CollectionFinder(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        placeholder = { Text("Find a collection") },
+        leadingIcon = {
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Clear collection search")
+                }
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.padding(top = 2.dp, bottom = 10.dp)
+    )
 }
 
 private data class SpecialEntry(
