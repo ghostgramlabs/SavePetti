@@ -39,6 +39,8 @@ object CategoryPalette {
         CategoryPreset("read_later", "Read Later", "\uD83D\uDCD6", ReadLaterSky.toLongHex()),
         CategoryPreset("finance",    "Finance",    "\uD83D\uDCB0", FinanceEmerald.toLongHex()),
         CategoryPreset("music",      "Music",      "\uD83C\uDFB5", MusicCoral.toLongHex()),
+        CategoryPreset("books",      "Books",      "\uD83D\uDCDA", ReadingForest.toLongHex()),
+        CategoryPreset("food_spots", "Food Spots", "\uD83C\uDF55", RecipeOrange.toLongHex()),
         CategoryPreset("shopping",   "Shopping",   "\uD83D\uDECD\uFE0F", ShoppingOrange.toLongHex()),
         CategoryPreset("work",       "Work",       "\uD83D\uDCBC", WorkIndigo.toLongHex()),
         CategoryPreset("ideas",      "Ideas",      "\uD83D\uDCA1", IdeasMustard.toLongHex()),
