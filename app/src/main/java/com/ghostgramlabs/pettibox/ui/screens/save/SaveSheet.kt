@@ -30,8 +30,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,6 +91,7 @@ fun SaveSheet(
     var showCreate by remember { mutableStateOf(false) }
     var showReminderPicker by remember { mutableStateOf(false) }
     var showCustomReminder by remember { mutableStateOf(false) }
+    var collectionQuery by remember { mutableStateOf("") }
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     val titleFocus = remember { FocusRequester() }
     val haptics = LocalHapticFeedback.current
@@ -265,13 +268,40 @@ fun SaveSheet(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(10.dp))
-            val visibleCategories = remember(state.categories, state.suggestedCategory) {
+            // Finder appears once the chip row is long enough to be tedious
+            // to scroll horizontally — same threshold as the Browse strip on
+            // home, so the affordance shows up in the same situations.
+            if (state.categories.size > 8) {
+                CollectionFinder(
+                    query = collectionQuery,
+                    onQueryChange = { collectionQuery = it }
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            val visibleCategories = remember(state.categories, state.suggestedCategory, collectionQuery) {
                 val suggested = state.suggestedCategory
-                if (suggested == null) {
+                val q = collectionQuery.trim()
+                val filtered = if (q.isBlank()) {
                     state.categories
                 } else {
-                    state.categories.sortedBy { if (it.id == suggested) 0 else 1 }
+                    state.categories.filter { c ->
+                        c.name.contains(q, ignoreCase = true) || c.emoji.contains(q)
+                    }
                 }
+                if (suggested == null) {
+                    filtered
+                } else {
+                    filtered.sortedBy { if (it.id == suggested) 0 else 1 }
+                }
+            }
+            if (visibleCategories.isEmpty() && collectionQuery.isNotBlank()) {
+                Text(
+                    "No collection matches \"$collectionQuery\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                Spacer(Modifier.height(6.dp))
             }
             LazyRow(
                 contentPadding = PaddingValues(end = 8.dp),
@@ -664,6 +694,35 @@ private fun AddToExistingChip(onClick: () -> Unit) {
         Spacer(Modifier.width(6.dp))
         Text("→", style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
     }
+}
+
+@Composable
+private fun CollectionFinder(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        placeholder = { Text("Find collection") },
+        leadingIcon = {
+            Icon(
+                Icons.Rounded.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Clear collection filter")
+                }
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 @Composable
