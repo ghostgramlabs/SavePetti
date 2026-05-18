@@ -265,11 +265,19 @@ fun SaveSheet(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(10.dp))
+            val visibleCategories = remember(state.categories, state.suggestedCategory) {
+                val suggested = state.suggestedCategory
+                if (suggested == null) {
+                    state.categories
+                } else {
+                    state.categories.sortedBy { if (it.id == suggested) 0 else 1 }
+                }
+            }
             LazyRow(
                 contentPadding = PaddingValues(end = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(state.categories, key = { it.id }) { c ->
+                items(visibleCategories, key = { it.id }) { c ->
                     val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
                     CategoryChip(
                         label = c.name,

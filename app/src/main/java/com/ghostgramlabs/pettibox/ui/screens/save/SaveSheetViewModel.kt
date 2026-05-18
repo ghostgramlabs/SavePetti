@@ -151,7 +151,7 @@ class SaveSheetViewModel @Inject constructor(
     private fun suggestCategoryId(url: String?, source: SourceApp, title: String?): String? {
         val haystack = listOfNotNull(url, title).joinToString(" ").lowercase()
         if (haystack.isBlank()) return null
-        return when {
+        return suggestCategoryIdFromText(haystack, source) ?: when {
             // Music / video — these dominate share traffic for many users
             Regex("youtube\\.com|youtu\\.be|soundcloud|spotify\\.com|music\\.apple|bandcamp")
                 .containsMatchIn(haystack) -> "music"
@@ -175,6 +175,48 @@ class SaveSheetViewModel @Inject constructor(
             else -> null
         }
     }
+
+    private fun suggestCategoryIdFromText(haystack: String, source: SourceApp): String? =
+        when {
+            source == SourceApp.MAPS ||
+                haystack.hasAny("restaurant", "cafe", "coffee shop", "menu", "brunch", "dinner spot", "lunch spot") ||
+                haystack.matchesAny("yelp|zomato|opentable|resy|doordash|ubereats|swiggy|maps\\.app\\.goo\\.gl|google\\.com/maps") -> "food_spots"
+            source == SourceApp.SPOTIFY ||
+                haystack.matchesAny("spotify\\.com|soundcloud|music\\.apple|bandcamp|song|album|playlist|lyrics") -> "music"
+            source == SourceApp.YOUTUBE ||
+                haystack.matchesAny("youtube\\.com|youtu\\.be|netflix|primevideo|hotstar|hulu|disneyplus|imdb|letterboxd|trailer|movie|series|episode|watch later") -> "watch"
+            haystack.matchesAny("goodreads|kindle|audible|bookshop\\.org|barnesandnoble|storytel") ||
+                haystack.hasAny("book", "novel", "author", "reading list") -> "books"
+            haystack.matchesAny("allrecipes|foodnetwork|food52|epicurious|seriouseats|smittenkitchen|nytimes\\.com/recipes|cooking\\.nytimes|bonappetit\\.com|tasty\\.co") ||
+                haystack.hasAny("recipe", "ingredients", "cook time", "bake", "meal prep") -> "recipes"
+            haystack.matchesAny("airbnb|booking\\.com|kayak|expedia|tripadvisor|hotels\\.com|skyscanner|lonelyplanet|makemytrip|cleartrip") ||
+                haystack.hasAny("itinerary", "flight", "hotel", "visa", "things to do in") -> "travel"
+            source == SourceApp.AMAZON ||
+                haystack.matchesAny("amazon\\.|flipkart|etsy|ebay|walmart|target\\.com|bestbuy|myntra|ajio") ||
+                haystack.hasAny("buy", "cart", "wishlist", "price drop", "coupon") -> "shopping"
+            haystack.matchesAny("github\\.com|stackoverflow|developer\\.android|dev\\.to|npmjs|android\\.com|kotlinlang|jetbrains") ||
+                haystack.hasAny("api", "sdk", "github", "debug", "programming", "kotlin", "android development") -> "tech"
+            haystack.matchesAny("coursera|udemy|edx|skillshare|khanacademy|duolingo|masterclass") ||
+                haystack.hasAny("course", "tutorial", "lesson", "learn ", "study", "certification") -> "learning"
+            haystack.hasAny("gift", "birthday", "anniversary", "present idea", "christmas gift", "wishlist") -> "gifts"
+            haystack.matchesAny("headspace|calm\\.com|strava\\.com|peloton|fitbod|myfitnesspal") ||
+                haystack.hasAny("meditation", "yoga", "sleep", "wellness", "workout", "fitness ", "health") -> "health"
+            haystack.matchesAny("pinterest\\.|behance|dribbble|figma\\.com") ||
+                haystack.hasAny("inspiration", "moodboard", "idea", "ideas", "design") -> "ideas"
+            haystack.matchesAny("bloomberg|investing\\.com|marketwatch|finance\\.yahoo|wsj\\.com|moneycontrol|zerodha|groww") ||
+                haystack.hasAny("stock", "mutual fund", "budget", "invoice", "tax", "investment") -> "finance"
+            haystack.matchesAny("vogue|gq\\.com|hm\\.com|zara\\.com|uniqlo|nike\\.com|adidas") ||
+                haystack.hasAny("outfit", "style", "fashion", "shoes", "dress") -> "style"
+            haystack.matchesAny("medium\\.com|substack\\.com|longreads|nytimes\\.com|theguardian\\.com|wired\\.com|theatlantic|newyorker\\.com|technologyreview") ||
+                haystack.hasAny("article", "newsletter", "essay", "blog post") -> "read_later"
+            else -> null
+        }
+
+    private fun String.matchesAny(pattern: String): Boolean =
+        Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(this)
+
+    private fun String.hasAny(vararg needles: String): Boolean =
+        needles.any { it in this }
 
     fun setMode(m: SaveMode) = update { it.copy(mode = m) }
     fun setTitle(t: String) = update { it.copy(title = t) }
