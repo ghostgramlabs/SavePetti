@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ghostgramlabs.pettibox.MainActivity
+import com.ghostgramlabs.pettibox.data.reminders.ReminderAlarmReceiver
 import com.ghostgramlabs.pettibox.ui.theme.PettiBoxTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -24,8 +26,11 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val incoming = IncomingShare.from(intent)
-        if (!incoming.hasAnything) {
+        // Widget "Quick save" launches us with no shared content — show the
+        // Save sheet in empty/manual mode rather than bailing on hasAnything.
+        val quickSave = intent.getBooleanExtra(EXTRA_QUICK_SAVE, false)
+        val incoming = if (quickSave) IncomingShare() else IncomingShare.from(intent)
+        if (!quickSave && !incoming.hasAnything) {
             finish(); return
         }
         incomingShare = incoming
@@ -36,7 +41,18 @@ class ShareReceiverActivity : ComponentActivity() {
                     SaveSheet(
                         incoming = share,
                         onDismiss = { finish() },
-                        onSaved = { finish() }
+                        onSaved = { finish() },
+                        // Duplicate "Open it" → hand off to the main app via
+                        // the same deep-link MainActivity uses for reminder
+                        // taps, then close this transparent share activity.
+                        onOpenExisting = { id ->
+                            val i = Intent(this, MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                putExtra(ReminderAlarmReceiver.EXTRA_OPEN_ITEM_ID, id)
+                            }
+                            startActivity(i)
+                            finish()
+                        }
                     )
                 }
             }
@@ -46,11 +62,17 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val incoming = IncomingShare.from(intent)
-        if (!incoming.hasAnything) {
+        val quickSave = intent.getBooleanExtra(EXTRA_QUICK_SAVE, false)
+        val incoming = if (quickSave) IncomingShare() else IncomingShare.from(intent)
+        if (!quickSave && !incoming.hasAnything) {
             finish()
         } else {
             incomingShare = incoming
         }
+    }
+
+    companion object {
+        /** Set by the home-screen widget's Quick save button. */
+        const val EXTRA_QUICK_SAVE = "pettibox.widget.quickSave"
     }
 }

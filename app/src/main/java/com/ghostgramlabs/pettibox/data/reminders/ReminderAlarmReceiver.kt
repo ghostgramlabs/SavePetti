@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.ghostgramlabs.pettibox.MainActivity
@@ -38,10 +39,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
     @Inject lateinit var reminderPreferences: ReminderPreferences
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ReminderScheduler.ACTION_FIRE) return
+        val action = intent.action
+        if (action != ReminderScheduler.ACTION_FIRE && action != ACTION_SNOOZE) return
         val itemId = intent.getLongExtra(ReminderScheduler.EXTRA_ITEM_ID, -1L)
         if (itemId <= 0L) return
         val expectedAt = intent.getLongExtra(ReminderScheduler.EXTRA_EXPECTED_AT, 0L)
+        val snoozeAt = intent.getLongExtra(EXTRA_SNOOZE_AT, 0L)
         val appContext = context.applicationContext
         val pending = goAsync()
         // SupervisorJob so a coroutine failure doesn't tear down a shared
@@ -50,11 +53,26 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
-                fire(appContext, itemId, expectedAt)
+                if (action == ACTION_SNOOZE) snooze(appContext, itemId, snoozeAt)
+                else fire(appContext, itemId, expectedAt)
             } finally {
                 pending.finish()
             }
         }
+    }
+
+    /**
+     * Notification "Snooze" action: re-arm the reminder for [at] and clear
+     * the posted notification. Guards against a stale/zero time by falling
+     * back to one hour out.
+     */
+    private suspend fun snooze(ctx: Context, itemId: Long, at: Long) {
+        repository.getById(itemId) ?: return
+        val now = System.currentTimeMillis()
+        val target = if (at > now) at else now + ONE_HOUR_MS
+        repository.setRemindAt(itemId, target)
+        ReminderScheduler.schedule(ctx, itemId, target)
+        NotificationManagerCompat.from(ctx).cancel(itemId.toInt())
     }
 
     private suspend fun fire(ctx: Context, itemId: Long, expectedAt: Long) {
@@ -99,6 +117,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val now = System.currentTimeMillis()
         val notif = NotificationCompat.Builder(ctx, ReminderNotifications.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("From your shelf")
@@ -107,6 +126,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             .setContentIntent(openPi)
             .setAutoCancel(true)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // Snooze actions let the user re-defer without opening the app —
+            // the whole point of a "remind me later" save. Tapping the body
+            // still opens the item.
+            .addAction(snoozeAction(ctx, itemId, "Snooze 1h", "1h", now + ONE_HOUR_MS))
+            .addAction(snoozeAction(ctx, itemId, "This evening", "evening", thisEveningMillis(now)))
             .build()
         runCatching {
             @SuppressLint("MissingPermission")
@@ -114,7 +138,52 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * Builds a notification action that re-schedules the reminder. The
+     * intent's data Uri is made unique per (item, variant) so the two
+     * snooze PendingIntents don't collapse into one — `filterEquals` ignores
+     * extras, so without distinct data they'd share a PendingIntent and the
+     * second action would overwrite the first's snooze time.
+     */
+    private fun snoozeAction(
+        ctx: Context,
+        itemId: Long,
+        label: String,
+        variant: String,
+        at: Long
+    ): NotificationCompat.Action {
+        val intent = Intent(ctx, ReminderAlarmReceiver::class.java).apply {
+            action = ACTION_SNOOZE
+            data = Uri.parse("pettibox://reminder/snooze/$itemId/$variant")
+            putExtra(ReminderScheduler.EXTRA_ITEM_ID, itemId)
+            putExtra(EXTRA_SNOOZE_AT, at)
+        }
+        val pi = PendingIntent.getBroadcast(
+            ctx,
+            itemId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Action.Builder(0, label, pi).build()
+    }
+
+    /** Today at 19:00, or tomorrow at 19:00 if it's already past. */
+    private fun thisEveningMillis(now: Long): Long {
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = now
+            set(java.util.Calendar.HOUR_OF_DAY, 19)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        if (cal.timeInMillis <= now) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        return cal.timeInMillis
+    }
+
     companion object {
         const val EXTRA_OPEN_ITEM_ID = "pettibox.reminder.itemId"
+        const val ACTION_SNOOZE = "com.ghostgramlabs.pettibox.action.REMINDER_SNOOZE"
+        const val EXTRA_SNOOZE_AT = "pettibox.reminder.snoozeAt"
+        private const val ONE_HOUR_MS = 60 * 60 * 1000L
     }
 }

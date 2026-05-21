@@ -84,6 +84,8 @@ class SaveRepository @Inject constructor(
     suspend fun update(item: SaveItemEntity) = saveDao.update(item)
     suspend fun getById(id: Long) = saveDao.getById(id)
     fun observeById(id: Long) = saveDao.observeById(id)
+    /** Existing live save with this exact URL, if any — for duplicate-on-save detection. */
+    suspend fun findByUrl(url: String): SaveItemEntity? = saveDao.findByUrl(url)
 
     /**
      * Cleans up local files (attachments + the item's own localUri) before
@@ -97,6 +99,8 @@ class SaveRepository @Inject constructor(
     }
 
     fun observeRecent(limit: Int = 20) = saveDao.observeRecent(limit)
+    /** One-shot recent saves for the home-screen widget. */
+    suspend fun recentForWidget(limit: Int = 3): List<SaveItemEntity> = saveDao.recentForWidget(limit)
     fun observeFavorites() = saveDao.observeFavorites()
     fun observePinned() = saveDao.observePinned()
     suspend fun browseForSearch(): List<SaveItemEntity> = saveDao.browseForSearch()
@@ -126,6 +130,9 @@ class SaveRepository @Inject constructor(
     // Aggregates — never load full rows just to count.
     fun observeSourceCounts(): Flow<List<SourceCount>> = saveDao.observeSourceCounts()
     fun observeCategoryCounts(): Flow<List<CategoryCount>> = saveDao.observeCategoryCounts()
+    /** Collection ids, most-recently-used first — orders the Save sheet chip row. */
+    fun observeRecentCategoryIds(limit: Int = 12): Flow<List<String>> =
+        saveDao.observeRecentCategoryIds(limit)
     fun observeTotal(): Flow<Int> = saveDao.observeTotal()
     fun observeArchivedTotal(): Flow<Int> = saveDao.observeArchivedTotal()
     fun observeFavoriteTotal(): Flow<Int> = saveDao.observeFavoriteTotal()

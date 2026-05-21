@@ -57,7 +57,15 @@ data class SaveSheetState(
     // suggestion at all).
     val suggestedCategory: String? = null,
     val categories: List<CategoryEntity> = emptyList(),
+    // Collection ids ordered most-recently-used first. The chip row floats
+    // these to the front (after the suggested one), so a user's go-to
+    // collections are a tap away instead of buried by sort order.
+    val recentCategoryIds: List<String> = emptyList(),
     val recentItems: List<SaveItemEntity> = emptyList(),
+    // An existing live save with the same URL, if the incoming share is a
+    // link we've seen before. Drives the "you already saved this" banner;
+    // null means no duplicate (or the user chose "Save anyway").
+    val duplicateOf: SaveItemEntity? = null,
     val isResolving: Boolean = false,
     val isSaved: Boolean = false
 )
@@ -75,9 +83,9 @@ class SaveSheetViewModel @Inject constructor(
     private val ingestGeneration = AtomicLong(0L)
 
     val state: StateFlow<SaveSheetState> = combine(
-        _state, repo.observeCategories(), repo.observeRecent(30)
-    ) { s, cats, recent ->
-        s.copy(categories = cats, recentItems = recent)
+        _state, repo.observeCategories(), repo.observeRecent(30), repo.observeRecentCategoryIds()
+    ) { s, cats, recent, recentCatIds ->
+        s.copy(categories = cats, recentItems = recent, recentCategoryIds = recentCatIds)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), _state.value)
 
     fun ingest(share: IncomingShare) {
@@ -121,24 +129,88 @@ class SaveSheetViewModel @Inject constructor(
 
         if (firstUrl != null) {
             viewModelScope.launch {
+                val cats = loadCategoriesOnce()
+                // Surface a "you already saved this" nudge fast (cheap indexed
+                // lookup), before the slower metadata fetch resolves.
+                val dup = runCatching { repo.findByUrl(firstUrl) }.getOrNull()
+                if (generation != ingestGeneration.get()) return@launch
+                if (dup != null) _state.value = _state.value.copy(duplicateOf = dup)
                 val meta = metadata.fetch(firstUrl)
                 if (generation != ingestGeneration.get()) return@launch
                 val current = _state.value
                 val richerTitle = meta?.title?.takeIf { it.isNotBlank() }
+                val resolvedTitle =
+                    if (current.title == initialTitle && richerTitle != null) richerTitle else current.title
                 _state.value = current.copy(
-                    title = if (current.title == initialTitle && richerTitle != null) richerTitle else current.title,
+                    title = resolvedTitle,
                     previewImage = meta?.imageUrl,
                     description = meta?.description,
                     isResolving = false,
-                    // Re-run the heuristic with the metadata-resolved title
-                    // (often more descriptive than the raw share text) so a
-                    // YouTube URL whose share text was just the link still
-                    // suggests "Music" once we know the page title.
-                    suggestedCategory = current.suggestedCategory
-                        ?: suggestCategoryId(firstUrl, source, richerTitle ?: current.title)
+                    // Re-run suggestion with the metadata-resolved title (often
+                    // more descriptive than the raw share text) so a YouTube URL
+                    // whose share text was just the link still suggests "Music"
+                    // once we know the page title. A user collection named in the
+                    // content wins; otherwise the keyword heuristic. Don't move
+                    // the border out from under a user who's already picked.
+                    suggestedCategory = if (current.selectedCategory == null)
+                        bestSuggestion(firstUrl, source, resolvedTitle, current.suggestedCategory, cats)
+                    else current.suggestedCategory
+                )
+            }
+        } else {
+            // No URL to fetch, but once collections load we can still suggest a
+            // user collection named in the shared text/title.
+            viewModelScope.launch {
+                val cats = loadCategoriesOnce()
+                if (generation != ingestGeneration.get()) return@launch
+                val current = _state.value
+                if (current.selectedCategory != null) return@launch
+                _state.value = current.copy(
+                    suggestedCategory =
+                        bestSuggestion(null, source, current.title, current.suggestedCategory, cats)
                 )
             }
         }
+    }
+
+    private suspend fun loadCategoriesOnce(): List<CategoryEntity> =
+        runCatching { repo.observeCategories().first() }.getOrDefault(emptyList())
+
+    /**
+     * The single chip we border as a hint. A user's own collection named in the
+     * content beats everything (most personal signal); otherwise we keep the
+     * first keyword-heuristic guess we had, or compute one. Never pre-selects —
+     * a wrong border costs nothing, a wrong auto-save would cost trust.
+     */
+    private fun bestSuggestion(
+        url: String?,
+        source: SourceApp,
+        title: String?,
+        existing: String?,
+        categories: List<CategoryEntity>
+    ): String? {
+        val haystack = listOfNotNull(url, title).joinToString(" ").lowercase()
+        matchUserCollection(haystack, categories)?.let { return it }
+        return existing ?: suggestCategoryId(url, source, title)
+    }
+
+    /**
+     * Suggests a user-created collection whose name (as a whole word) or emoji
+     * appears in the shared content. Seeded collections are left to
+     * [suggestCategoryId]'s richer keyword rules. Longest name wins so
+     * "Work trips" beats "Work"; names under 3 chars are too noisy to match on.
+     */
+    private fun matchUserCollection(haystack: String, categories: List<CategoryEntity>): String? {
+        if (haystack.isBlank()) return null
+        return categories
+            .filter { it.userCreated && it.name.length >= 3 }
+            .sortedByDescending { it.name.length }
+            .firstOrNull { c ->
+                val name = c.name.lowercase()
+                Regex("\\b${Regex.escape(name)}\\b").containsMatchIn(haystack) ||
+                    (c.emoji.isNotBlank() && c.emoji in haystack)
+            }
+            ?.id
     }
 
     /**
@@ -231,6 +303,15 @@ class SaveSheetViewModel @Inject constructor(
         selectCategory(id)
     }
 
+    /**
+     * Sets the destination collection without toggling. Used by the search
+     * results list, where a second tap on the same row should keep the pick
+     * (it shows a check), not silently clear it — clearing was letting saves
+     * commit with no collection. To deselect, the user clears the search and
+     * taps the highlighted chip in the default row.
+     */
+    fun pickCategory(id: String) = update { it.copy(selectedCategory = id) }
+
     fun createCollection(nc: NewCollection) = viewModelScope.launch {
         val id = "user_" + UUID.randomUUID().toString().take(8)
         val maxOrder = (_state.value.categories.maxOfOrNull { it.sortOrder } ?: 0) + 1
@@ -252,6 +333,9 @@ class SaveSheetViewModel @Inject constructor(
     }
 
     fun setRemindAt(at: Long?) = update { it.copy(remindAt = at) }
+
+    /** "Save anyway" — dismiss the duplicate nudge and let the normal save proceed. */
+    fun dismissDuplicate() = update { it.copy(duplicateOf = null) }
 
     fun save() = viewModelScope.launch {
         val s = _state.value
@@ -312,6 +396,7 @@ class SaveSheetViewModel @Inject constructor(
         }
 
         _state.value = s.copy(isSaved = true)
+        com.ghostgramlabs.pettibox.widget.PettiBoxWidgetProvider.refresh(appContext)
     }
 
     private suspend fun ingestIfForeign(uriString: String): String? {
@@ -374,6 +459,7 @@ class SaveSheetViewModel @Inject constructor(
         }
 
         _state.value = s.copy(isSaved = true)
+        com.ghostgramlabs.pettibox.widget.PettiBoxWidgetProvider.refresh(appContext)
     }
 
     private fun parseTagInput(input: String): List<String> {

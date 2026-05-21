@@ -21,7 +21,10 @@ data class IncomingShare(
             val mime = intent.type
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
-            val combinedText = listOfNotNull(subject, text).joinToString("\n").ifBlank { null }
+            // Text highlighted in another app and sent via the selection
+            // toolbar (ACTION_PROCESS_TEXT) arrives here instead of EXTRA_TEXT.
+            val processText = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+            val combinedText = listOfNotNull(subject, text, processText).joinToString("\n").ifBlank { null }
             val urls = combinedText?.let { extractUrls(it) }.orEmpty()
 
             val streamUris: List<Uri> = when (intent.action) {

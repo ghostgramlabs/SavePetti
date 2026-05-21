@@ -28,6 +28,15 @@ interface SaveDao {
     @Query("SELECT * FROM save_items WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): SaveItemEntity?
 
+    /**
+     * Most recent live save pointing at the exact same URL — backs the
+     * "you already saved this" nudge on the Save sheet. Archived saves are
+     * ignored so re-saving something you deliberately tucked away isn't
+     * flagged as a duplicate.
+     */
+    @Query("SELECT * FROM save_items WHERE url = :url AND is_archived = 0 ORDER BY created_at DESC LIMIT 1")
+    suspend fun findByUrl(url: String): SaveItemEntity?
+
     @Query("SELECT * FROM save_items WHERE id = :id LIMIT 1")
     fun observeById(id: Long): Flow<SaveItemEntity?>
 
@@ -69,6 +78,11 @@ interface SaveDao {
 
     @Query("SELECT * FROM save_items WHERE is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
     fun observeRecent(limit: Int = 20): Flow<List<SaveItemEntity>>
+
+    /** One-shot recent saves for the home-screen widget (no Flow — the widget
+     *  re-queries on each update broadcast rather than observing). */
+    @Query("SELECT * FROM save_items WHERE is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
+    suspend fun recentForWidget(limit: Int): List<SaveItemEntity>
 
     @Query("SELECT * FROM save_items WHERE is_pinned = 1 AND is_archived = 0 ORDER BY updated_at DESC LIMIT :limit")
     fun observePinned(limit: Int = 12): Flow<List<SaveItemEntity>>
@@ -212,6 +226,24 @@ interface SaveDao {
         """
     )
     fun observeCategoryCounts(): Flow<List<CategoryCount>>
+
+    /**
+     * Collection ids ordered by the most recent (live) save assigned to them.
+     * Backs the Save sheet ordering where the user's recently-used collections
+     * float to the front of the chip row. Archived saves are excluded so a
+     * collection you've stopped using doesn't hold its spot on stale rows. The
+     * GROUP BY + MAX(created_at) rides the (category_id, created_at) index.
+     */
+    @Query(
+        """
+        SELECT category_id FROM save_items
+        WHERE category_id IS NOT NULL AND is_archived = 0
+        GROUP BY category_id
+        ORDER BY MAX(created_at) DESC
+        LIMIT :limit
+        """
+    )
+    fun observeRecentCategoryIds(limit: Int = 12): Flow<List<String>>
 
     @Query("SELECT COUNT(*) FROM save_items WHERE is_archived = 0")
     fun observeTotal(): Flow<Int>

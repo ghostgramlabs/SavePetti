@@ -168,7 +168,11 @@ fun HomeScreen(
         SaveSheet(
             incoming = share,
             onDismiss = { pendingShare = null },
-            onSaved = { pendingShare = null }
+            onSaved = { pendingShare = null },
+            onOpenExisting = { id ->
+                pendingShare = null
+                onOpenItem(id)
+            }
         )
     }
 

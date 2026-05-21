@@ -242,6 +242,20 @@ fun DetailScreen(
         val accent = state.category?.let { Color(it.colorHex) } ?: MaterialTheme.colorScheme.primary
         val source = runCatching { SourceApp.valueOf(item.sourceApp) }.getOrDefault(SourceApp.UNKNOWN)
 
+        // Opening the saved URL in the browser. Shared by the "Open original"
+        // button and — for link saves whose hero is the web preview — a tap on
+        // the photo itself.
+        val openOriginal: () -> Unit = {
+            val url = item.url
+            if (!url.isNullOrBlank()) {
+                val i = Intent(Intent.ACTION_VIEW, url.toUri())
+                runCatching { ctx.startActivity(i) }
+                    .onFailure {
+                        scope.launch { snackbarHostState.showSnackbar("Couldn't open original") }
+                    }
+            }
+        }
+
         Column(
             Modifier
                 .padding(padding)
@@ -316,6 +330,10 @@ fun DetailScreen(
                         GalleryItem(uri = it, kind = item.contentType)
                     }
                 }
+            // When the only "image" is a link's web preview (no real
+            // attachments), tapping the hero should open the page, not a photo
+            // zoom — an og:image isn't worth zooming, the destination is.
+            val heroIsLinkPreview = visibleAttachments.isEmpty() && !item.url.isNullOrBlank()
             viewerIndex = viewerIndex?.takeIf { it in gallery.indices }
             viewerIndex?.let { index ->
                 AttachmentViewerDialog(
@@ -368,7 +386,9 @@ fun DetailScreen(
                     galleryItem = gallery.first(),
                     accent = accent,
                     title = item.title,
-                    onOpen = { viewerIndex = 0 },
+                    // Link preview → open the page; a real attached image → zoom.
+                    onOpen = { if (heroIsLinkPreview) openOriginal() else { viewerIndex = 0 } },
+                    linkPreview = heroIsLinkPreview,
                     onShare = {
                         if (!shareGalleryItem(ctx, gallery.first(), item.title)) {
                             scope.launch { snackbarHostState.showSnackbar("Couldn't share this item") }
@@ -384,16 +404,39 @@ fun DetailScreen(
                         .padding(horizontal = 16.dp)
                 )
             } else {
+                // No preview image. For a link this placeholder is still the
+                // natural "tap to open" target, so make it open the page too.
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .height(180.dp)
                         .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(accent.copy(alpha = 0.18f)),
+                        .background(accent.copy(alpha = 0.18f))
+                        .let { m -> if (heroIsLinkPreview) m.clickable(onClick = openOriginal) else m },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(source.emoji, style = MaterialTheme.typography.displayLarge)
+                    if (heroIsLinkPreview) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(source.emoji, style = MaterialTheme.typography.displayLarge)
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.OpenInNew, null, tint = accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Open link",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = accent,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    } else {
+                        Text(source.emoji, style = MaterialTheme.typography.displayLarge)
+                    }
                 }
             }
 
@@ -458,13 +501,7 @@ fun DetailScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .background(accent.copy(alpha = 0.14f))
-                            .clickable {
-                                val i = Intent(Intent.ACTION_VIEW, item.url.toUri())
-                                runCatching { ctx.startActivity(i) }
-                                    .onFailure {
-                                        scope.launch { snackbarHostState.showSnackbar("Couldn't open original") }
-                                    }
-                            }
+                            .clickable(onClick = openOriginal)
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
                         Icon(
@@ -802,7 +839,11 @@ private fun AttachmentPreview(
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // When true, this hero is a link's web preview rather than a real photo:
+    // tapping opens the page, and we show an "Open link" affordance so the
+    // tap target doesn't masquerade as a zoomable image.
+    linkPreview: Boolean = false
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -812,26 +853,58 @@ private fun AttachmentPreview(
     ) {
         AsyncImage(
             model = galleryItem.uri,
-            contentDescription = title,
+            contentDescription = if (linkPreview) "Open $title in browser" else title,
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(onClick = onOpen)
         )
+        if (linkPreview) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(scheme.surface.copy(alpha = 0.92f))
+                    .clickable(onClick = onOpen)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.OpenInNew,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Open link",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(10.dp)
         ) {
-            IconButton(
-                onClick = onShare,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(scheme.surface.copy(alpha = 0.92f))
-                    .size(48.dp)
-            ) {
-                Icon(Icons.Rounded.Share, contentDescription = "Share this item", tint = scheme.primary)
+            // No Share button on a link's web preview: it would share the
+            // og:image URL as an EXTRA_STREAM with a text/plain mime, which
+            // most targets can't consume. The detail action bar already
+            // shares the link URL correctly.
+            if (!linkPreview) {
+                IconButton(
+                    onClick = onShare,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(scheme.surface.copy(alpha = 0.92f))
+                        .size(48.dp)
+                ) {
+                    Icon(Icons.Rounded.Share, contentDescription = "Share this item", tint = scheme.primary)
+                }
             }
             if (galleryItem.attachmentId != null) {
                 IconButton(

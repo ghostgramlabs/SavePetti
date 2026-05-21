@@ -70,6 +70,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <!-- "Save to PettiBox" in the text-selection toolbar of any app:
+                 highlighted text arrives as EXTRA_PROCESS_TEXT and is routed
+                 through the same Save sheet as a shared note. -->
+            <intent-filter android:label="@string/share_label">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -124,6 +132,20 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
+        </receiver>
+
+        <!-- Home-screen widget: recent saves + one-tap Quick save. Exported
+             so the launcher/host can bind to it. -->
+        <receiver
+            android:name=".widget.PettiBoxWidgetProvider"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/pettibox_widget_info" />
         </receiver>
     </application>
 </manifest>
