@@ -78,6 +78,8 @@ import coil.compose.AsyncImage
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
+import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
+import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
 import com.ghostgramlabs.pettibox.ui.components.ReminderPickerSheet
 import com.ghostgramlabs.pettibox.ui.components.formatReminderAt
@@ -486,20 +488,34 @@ private fun FinderPickerBody(
         // when the keyboard is closed and shrink when it opens, always keeping
         // the finder above and the footer below in view.
         if (visibleCategories.isEmpty()) {
+            // In-character empty state: the Keeper went looking and came up
+            // empty, then offers to start the collection they searched for —
+            // instead of a bare line of grey text.
             Column(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Spacer(Modifier.height(8.dp))
+                KeeperMascot(size = 92.dp, pose = KeeperPose.Search)
+                Spacer(Modifier.height(12.dp))
                 Text(
-                    "No collection matches \"$query\"",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "No collection called \"$query\" yet",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                Spacer(Modifier.height(10.dp))
-                // Offer to create the thing they searched for, right here.
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Want to start one?",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(14.dp))
                 NewCollectionChip(onClick = onCreateCollection)
             }
         } else {
@@ -843,22 +859,20 @@ private fun SuccessPanel(remindAt: Long? = null) {
             .padding(vertical = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            Modifier
-                .size(96.dp)
-                .clip(CircleShape)
-                .background(accent.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Rounded.Check, null,
-                tint = accent,
-                modifier = Modifier.size(56.dp)
-            )
-        }
-        Spacer(Modifier.height(20.dp))
+        // The Keeper celebrates the save. This is the one screen shown on
+        // every single save, so it's where the app's character belongs — not
+        // a generic checkmark. A clock badge appears when a reminder was
+        // attached, confirming both actions at a glance.
+        KeeperMascot(
+            size = 124.dp,
+            accent = accent,
+            pose = KeeperPose.SaveSuccess,
+            badgeIcon = if (remindAt != null && remindAt > System.currentTimeMillis())
+                Icons.Rounded.AccessTime else null
+        )
+        Spacer(Modifier.height(16.dp))
         Text(
-            "Saved!",
+            "Tucked away!",
             style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
             color = MaterialTheme.colorScheme.onBackground
         )

@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.ghostgramlabs.pettibox.MainActivity
+import com.ghostgramlabs.pettibox.R
 import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -125,7 +126,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         // different hard-coded ones.
         val evening = reminderPreferences.eveningTime.first()
         val notif = NotificationCompat.Builder(ctx, ReminderNotifications.CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("From your shelf")
             .setContentText(title)
             .setStyle(NotificationCompat.BigTextStyle().bigText(title))
