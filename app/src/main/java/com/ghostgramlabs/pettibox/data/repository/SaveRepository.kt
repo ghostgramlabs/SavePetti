@@ -99,8 +99,6 @@ class SaveRepository @Inject constructor(
     }
 
     fun observeRecent(limit: Int = 20) = saveDao.observeRecent(limit)
-    /** One-shot recent saves for the home-screen widget. */
-    suspend fun recentForWidget(limit: Int = 3): List<SaveItemEntity> = saveDao.recentForWidget(limit)
     fun observeFavorites() = saveDao.observeFavorites()
     fun observePinned() = saveDao.observePinned()
     suspend fun browseForSearch(): List<SaveItemEntity> = saveDao.browseForSearch()

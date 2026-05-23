@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TextSnippet
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
@@ -45,6 +46,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,8 +54,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -67,12 +72,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
+import com.ghostgramlabs.pettibox.data.preferences.ReminderTime
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
@@ -86,6 +93,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -113,9 +121,14 @@ fun SettingsScreen(
         )
     )
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
+    val morningReminderTime by viewModel.morningReminderTime
+        .collectAsStateWithLifecycle(initialValue = ReminderTime(9, 0))
+    val eveningReminderTime by viewModel.eveningReminderTime
+        .collectAsStateWithLifecycle(initialValue = ReminderTime(21, 0))
     var showCreateCollection by remember { mutableStateOf(false) }
     var editingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var deletingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
+    var editingReminderTime by remember { mutableStateOf<ReminderTimeTarget?>(null) }
     var showHelpDetails by remember { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
     var hasExactAlarmPermission by remember { mutableStateOf(viewModel.hasExactAlarmPermission()) }
@@ -172,6 +185,28 @@ fun SettingsScreen(
             shape = RoundedCornerShape(24.dp)
         )
     }
+
+    editingReminderTime?.let { target ->
+        val current = if (target == ReminderTimeTarget.MORNING) morningReminderTime else eveningReminderTime
+        ReminderTimeDialog(
+            title = if (target == ReminderTimeTarget.MORNING) "Morning reminder time" else "Evening reminder time",
+            initialHour = current.hour,
+            initialMinute = current.minute,
+            onDismiss = { editingReminderTime = null },
+            onConfirm = { hour, minute ->
+                editingReminderTime = null
+                val label = if (target == ReminderTimeTarget.MORNING) {
+                    viewModel.setMorningReminderTime(hour, minute); "Morning"
+                } else {
+                    viewModel.setEveningReminderTime(hour, minute); "Evening"
+                }
+                scope.launch {
+                    snackbarHostState.showSnackbar("$label reminders set to ${formatClock(hour, minute)}")
+                }
+            }
+        )
+    }
+
     if (showCreateCollection) {
         CreateCollectionDialog(
             onCreate = { newCollection ->
@@ -372,6 +407,33 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Reminders") {
+                Text(
+                    "Quick reminder times",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "The times the one-tap presets fire at. \"Tonight\" uses the evening time; \"Tomorrow\", \"This weekend\", and \"Next week\" use the morning time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                ReminderTimeRow(
+                    icon = Icons.Rounded.LightMode,
+                    label = "Morning reminders",
+                    sub = "Tomorrow · This weekend · Next week",
+                    time = formatClock(morningReminderTime.hour, morningReminderTime.minute),
+                    onClick = { editingReminderTime = ReminderTimeTarget.MORNING }
+                )
+                Spacer(Modifier.height(8.dp))
+                ReminderTimeRow(
+                    icon = Icons.Rounded.DarkMode,
+                    label = "Evening reminders",
+                    sub = "Tonight",
+                    time = formatClock(eveningReminderTime.hour, eveningReminderTime.minute),
+                    onClick = { editingReminderTime = ReminderTimeTarget.EVENING }
+                )
+                Spacer(Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -485,7 +547,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Remind me later",
-                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom date and time. Reminders fire on the dot and survive a phone restart.",
+                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom date and time. Set what time the morning and evening presets fire under Reminders. Reminders fire on the dot and survive a phone restart.",
                     icon = Icons.Rounded.AccessTime
                 )
                 HelpItem(
@@ -925,6 +987,129 @@ private fun PageLimitChoice(
         colors = colors
     ) {
         Text("$limit", fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Which preset anchor the reminder-time dialog is editing. */
+private enum class ReminderTimeTarget { MORNING, EVENING }
+
+/** Formats an hour/minute into the user's 12/24-hour locale clock, e.g. "9:00 PM". */
+private fun formatClock(hour: Int, minute: Int): String {
+    val cal = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+    }
+    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(cal.time)
+}
+
+/** Tappable Settings row showing a reminder anchor and its current time. */
+@Composable
+private fun ReminderTimeRow(
+    icon: ImageVector,
+    label: String,
+    sub: String,
+    time: String,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(scheme.surfaceVariant.copy(alpha = 0.5f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+    ) {
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(scheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = scheme.onSurface
+            )
+            Text(
+                sub,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            time,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = scheme.primary
+        )
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/**
+ * Modal clock picker for a reminder anchor. Uses the same Material3
+ * [TimePicker] as the custom-reminder sheet, wrapped in a plain Dialog so the
+ * clock face has room (an AlertDialog's content slot clips it on small phones).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimeDialog(
+    title: String,
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val timeState = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = false
+    )
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(16.dp))
+                TimePicker(state = timeState)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(timeState.hour, timeState.minute) },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Set", fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
     }
 }
 

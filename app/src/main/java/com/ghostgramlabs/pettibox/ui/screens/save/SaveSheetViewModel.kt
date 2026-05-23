@@ -396,7 +396,6 @@ class SaveSheetViewModel @Inject constructor(
         }
 
         _state.value = s.copy(isSaved = true)
-        com.ghostgramlabs.pettibox.widget.PettiBoxWidgetProvider.refresh(appContext)
     }
 
     private suspend fun ingestIfForeign(uriString: String): String? {
@@ -459,7 +458,6 @@ class SaveSheetViewModel @Inject constructor(
         }
 
         _state.value = s.copy(isSaved = true)
-        com.ghostgramlabs.pettibox.widget.PettiBoxWidgetProvider.refresh(appContext)
     }
 
     private fun parseTagInput(input: String): List<String> {

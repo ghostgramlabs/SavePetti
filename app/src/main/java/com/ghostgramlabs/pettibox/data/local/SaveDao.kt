@@ -79,11 +79,6 @@ interface SaveDao {
     @Query("SELECT * FROM save_items WHERE is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
     fun observeRecent(limit: Int = 20): Flow<List<SaveItemEntity>>
 
-    /** One-shot recent saves for the home-screen widget (no Flow — the widget
-     *  re-queries on each update broadcast rather than observing). */
-    @Query("SELECT * FROM save_items WHERE is_archived = 0 ORDER BY created_at DESC LIMIT :limit")
-    suspend fun recentForWidget(limit: Int): List<SaveItemEntity>
-
     @Query("SELECT * FROM save_items WHERE is_pinned = 1 AND is_archived = 0 ORDER BY updated_at DESC LIMIT :limit")
     fun observePinned(limit: Int = 12): Flow<List<SaveItemEntity>>
 

@@ -12,6 +12,8 @@ import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
+import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
+import com.ghostgramlabs.pettibox.data.preferences.ReminderTime
 import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
@@ -30,18 +32,30 @@ class SettingsViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val ocrPreferences: OcrPreferences,
     private val backupPreferences: BackupPreferences,
+    private val reminderPreferences: ReminderPreferences,
     private val localBackupStore: LocalBackupStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
     val pdfPageLimit: Flow<Int> = ocrPreferences.pdfPageLimit
     val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
+    /** Anchors the quick-reminder presets snap to (see ReminderPreferences). */
+    val morningReminderTime: Flow<ReminderTime> = reminderPreferences.morningTime
+    val eveningReminderTime: Flow<ReminderTime> = reminderPreferences.eveningTime
     /** Live category list — drives both the count label and conflict checks. */
     val collections: Flow<List<CategoryEntity>> = repo.observeCategories()
 
     fun hasExactAlarmPermission(): Boolean = ReminderScheduler.hasExactAlarmPermission(appContext)
 
     fun openExactAlarmSettings(): Boolean = ReminderScheduler.openExactAlarmSettings(appContext)
+
+    fun setMorningReminderTime(hour: Int, minute: Int) = viewModelScope.launch {
+        reminderPreferences.setMorningTime(hour, minute)
+    }
+
+    fun setEveningReminderTime(hour: Int, minute: Int) = viewModelScope.launch {
+        reminderPreferences.setEveningTime(hour, minute)
+    }
 
     /**
      * Create a collection from Settings. Mirrors [SaveSheetViewModel]'s

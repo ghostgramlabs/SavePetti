@@ -75,6 +75,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.ReminderCustomSheet
@@ -189,9 +190,60 @@ fun SaveSheet(
             )
             return@ModalBottomSheet
         }
-        // Scrollable upper area + sticky action bar at the bottom. Without
-        // this split, the keyboard reduces the sheet's available height to a
-        // sliver and the Save button falls below the visible region.
+        val finderShown = state.categories.size > 8
+        val visibleCategories = remember(
+            state.categories, state.suggestedCategory, state.recentCategoryIds, collectionQuery
+        ) {
+            val suggested = state.suggestedCategory
+            val q = collectionQuery.trim()
+            val filtered = if (q.isBlank()) {
+                state.categories
+            } else {
+                state.categories.filter { c ->
+                    c.name.contains(q, ignoreCase = true) || c.emoji.contains(q)
+                }
+            }
+            // One ordering: suggested first, then recently-used by recency,
+            // then the rest by sort order. Each collection appears once.
+            val recentRank = state.recentCategoryIds.withIndex()
+                .associate { (i, id) -> id to i }
+            filtered.sortedWith(
+                compareBy(
+                    { if (it.id == suggested) -1 else 0 },
+                    { recentRank[it.id] ?: Int.MAX_VALUE },
+                    { it.sortOrder }
+                )
+            )
+        }
+
+        // Many collections: a dedicated picker layout where the collection list
+        // owns its own scroll and the search field + Save button stay pinned,
+        // so typing/scrolling never shoves the rest of the sheet around.
+        if (finderShown) {
+            FinderPickerBody(
+                state = state,
+                query = collectionQuery,
+                onQueryChange = { collectionQuery = it },
+                visibleCategories = visibleCategories,
+                selectedCategoryName = selectedCategoryName,
+                onSelectCategory = { viewModel.pickCategory(it) },
+                onToggleFavorite = { viewModel.toggleFavorite() },
+                onSave = { viewModel.save() },
+                onCreateCollection = { showCreate = true },
+                onPickReminder = { showReminderPicker = true },
+                onAppendExisting = { viewModel.setMode(SaveMode.PICK_EXISTING) },
+                onTitleChange = viewModel::setTitle,
+                onNotesChange = viewModel::setNotes,
+                onTagsChange = viewModel::setTags,
+                titleFocus = titleFocus,
+                onOpenExisting = onOpenExisting,
+                onDismissDuplicate = { viewModel.dismissDuplicate() }
+            )
+            return@ModalBottomSheet
+        }
+
+        // Few collections: the original single-scroll layout with the big
+        // preview and a horizontal chip row — no finder, no separate scroll.
         Column(
             Modifier
                 .fillMaxWidth()
@@ -292,142 +344,43 @@ fun SaveSheet(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(10.dp))
-            // Finder appears once the chip row is long enough to be tedious
-            // to scroll horizontally — same threshold as the Browse strip on
-            // home, so the affordance shows up in the same situations.
-            if (state.categories.size > 8) {
-                CollectionFinder(
-                    query = collectionQuery,
-                    onQueryChange = { collectionQuery = it }
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-            val visibleCategories = remember(
-                state.categories, state.suggestedCategory, state.recentCategoryIds, collectionQuery
+            // The familiar horizontal chip row with New / Remind me / Append as
+            // peer chips at the end. Tap selects the destination; the sticky
+            // footer commits, so notes/tags/reminder can still be added first.
+            LazyRow(
+                contentPadding = PaddingValues(end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val suggested = state.suggestedCategory
-                val q = collectionQuery.trim()
-                val filtered = if (q.isBlank()) {
-                    state.categories
-                } else {
-                    state.categories.filter { c ->
-                        c.name.contains(q, ignoreCase = true) || c.emoji.contains(q)
-                    }
-                }
-                // One ordering, no separate "Recent" section: the suggested
-                // chip pins first (keeping its border), then recently-used
-                // collections by recency, then everything else by sort order.
-                // Each collection appears exactly once, so there's no
-                // duplicate-chip confusion.
-                val recentRank = state.recentCategoryIds.withIndex()
-                    .associate { (i, id) -> id to i }
-                filtered.sortedWith(
-                    compareBy(
-                        { if (it.id == suggested) -1 else 0 },
-                        { recentRank[it.id] ?: Int.MAX_VALUE },
-                        { it.sortOrder }
+                items(visibleCategories, key = { it.id }) { c ->
+                    val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
+                    CategoryChip(
+                        label = c.name,
+                        emoji = c.emoji,
+                        color = Color(c.colorHex),
+                        selected = state.selectedCategory == c.id,
+                        tilt = tilt,
+                        // Hint border on the URL/title-suggested chip so the
+                        // user notices it without us auto-saving for them.
+                        suggested = state.selectedCategory == null &&
+                            state.suggestedCategory == c.id,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.saveToCategory(c.id)
+                        }
                     )
-                )
-            }
-            if (collectionQuery.isBlank()) {
-                // No search: the familiar horizontal chip row with New /
-                // Remind me / Append as peer chips at the end.
-                LazyRow(
-                    contentPadding = PaddingValues(end = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(visibleCategories, key = { it.id }) { c ->
-                        val tilt = if (c.sortOrder % 2 == 0) -2f else 1.5f
-                        CategoryChip(
-                            label = c.name,
-                            emoji = c.emoji,
-                            color = Color(c.colorHex),
-                            selected = state.selectedCategory == c.id,
-                            tilt = tilt,
-                            // Hint border on the URL/title-suggested chip so
-                            // the user notices it without us auto-saving for
-                            // them — auto-save to the wrong place would be
-                            // worse than no suggestion.
-                            suggested = state.selectedCategory == null &&
-                                state.suggestedCategory == c.id,
-                            // Tap selects the destination; the sticky footer
-                            // commits. This keeps the flow fast without
-                            // accidentally saving before notes/tags/reminder.
-                            onClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.saveToCategory(c.id)
-                            }
-                        )
-                    }
-                    item { NewCollectionChip(onClick = { showCreate = true }) }
-                    item {
-                        // Snooze at save-time. The picker writes to
-                        // state.remindAt; save() schedules the worker for the
-                        // new row id once the insert lands.
-                        RemindMeChip(
-                            remindAt = state.remindAt,
-                            onClick = { showReminderPicker = true }
-                        )
-                    }
-                    if (state.recentItems.isNotEmpty()) {
-                        item {
-                            AddToExistingChip(
-                                onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
-                            )
-                        }
-                    }
                 }
-            } else {
-                // Searching: matches become a vertical, full-width list so the
-                // user isn't hunting for a small chip in a horizontal strip.
-                // A tap highlights the row and updates the footer button; the
-                // footer commits, so notes/tags/reminder can still be added
-                // first. Tapping sets (never toggles) the selection — a second
-                // tap no longer silently clears it, which was letting saves
-                // through with no collection attached.
-                if (visibleCategories.isEmpty()) {
-                    Text(
-                        "No collection matches \"$collectionQuery\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 4.dp)
+                item { NewCollectionChip(onClick = { showCreate = true }) }
+                item {
+                    RemindMeChip(
+                        remindAt = state.remindAt,
+                        onClick = { showReminderPicker = true }
                     )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        visibleCategories.forEach { c ->
-                            CollectionResultRow(
-                                name = c.name,
-                                emoji = c.emoji,
-                                color = Color(c.colorHex),
-                                selected = state.selectedCategory == c.id,
-                                onClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.pickCategory(c.id)
-                                }
-                            )
-                        }
-                    }
                 }
-                // Keep New / Remind me / Append reachable while searching, but
-                // below the results rather than mixed in with them.
-                Spacer(Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(end = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item { NewCollectionChip(onClick = { showCreate = true }) }
+                if (state.recentItems.isNotEmpty()) {
                     item {
-                        RemindMeChip(
-                            remindAt = state.remindAt,
-                            onClick = { showReminderPicker = true }
+                        AddToExistingChip(
+                            onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
                         )
-                    }
-                    if (state.recentItems.isNotEmpty()) {
-                        item {
-                            AddToExistingChip(
-                                onClick = { viewModel.setMode(SaveMode.PICK_EXISTING) }
-                            )
-                        }
                     }
                 }
             }
@@ -447,60 +400,269 @@ fun SaveSheet(
             // sticky action bar even before the user scrolls.
             Spacer(Modifier.height(16.dp))
         }
-        // Sticky action bar — always visible regardless of keyboard /
-        // content. Hairline top border separates it from the scrolling
-        // chooser content above so it reads as a footer, not as more of
-        // the same column.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .drawBehind {
-                    val stroke = 1.dp.toPx()
-                    drawLine(
-                        color = androidx.compose.ui.graphics.Color(0x14000000),
-                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                        end = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                        strokeWidth = stroke
+        SaveFooter(
+            isFavorite = state.isFavorite,
+            selectedCategoryName = selectedCategoryName,
+            onToggleFavorite = { viewModel.toggleFavorite() },
+            onSave = { viewModel.save() }
+        )
+        }
+    }
+}
+
+/**
+ * Picker-first layout used when there are enough collections to need the
+ * finder. The collection list owns its own scroll region (a [LazyColumn] with
+ * weight) between a pinned header (Save-to + search) and a pinned [SaveFooter],
+ * so typing or scrolling collections never moves the rest of the sheet.
+ *
+ * Engaging the search (focusing it or typing) collapses the preview and the
+ * secondary chips/optional-details, handing the whole sheet to the list —
+ * which is where the user's attention is when they're hunting for a
+ * collection. Stepping out of search restores the full sheet.
+ */
+@Composable
+private fun FinderPickerBody(
+    state: SaveSheetState,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    visibleCategories: List<CategoryEntity>,
+    selectedCategoryName: String?,
+    onSelectCategory: (String) -> Unit,
+    onToggleFavorite: () -> Unit,
+    onSave: () -> Unit,
+    onCreateCollection: () -> Unit,
+    onPickReminder: () -> Unit,
+    onAppendExisting: () -> Unit,
+    onTitleChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
+    onTagsChange: (String) -> Unit,
+    titleFocus: FocusRequester,
+    onOpenExisting: (Long) -> Unit,
+    onDismissDuplicate: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    var finderFocused by remember { mutableStateOf(false) }
+    val searching = finderFocused || query.isNotBlank()
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.92f)
+            .imePadding()
+    ) {
+        // Pinned header: context (only when not searching) + Save-to + finder.
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            Spacer(Modifier.height(6.dp))
+            if (!searching) {
+                state.duplicateOf?.let { dup ->
+                    DuplicateBanner(
+                        existing = dup,
+                        categoryLabel = state.categories.firstOrNull { it.id == dup.categoryId }
+                            ?.let { "${it.emoji} ${it.name}" },
+                        onOpen = { onOpenExisting(dup.id) },
+                        onDismiss = onDismissDuplicate
                     )
+                    Spacer(Modifier.height(12.dp))
                 }
-                .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .navigationBarsPadding()
-        ) {
-            // Heart icon stands on its own — the previous "Mark favorite" /
-            // "Loved it" text label was visual noise next to a universally
-            // understood symbol. The contentDescription preserves the
-            // explanation for screen readers.
-            IconButton(onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                viewModel.toggleFavorite()
-            }) {
-                Icon(
-                    if (state.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (state.isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
+                CompactContext(state)
+                Spacer(Modifier.height(14.dp))
             }
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.save()
-                },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+            Text(
+                "Save to",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(10.dp))
+            CollectionFinder(
+                query = query,
+                onQueryChange = onQueryChange,
+                onFocusChanged = { finderFocused = it }
+            )
+            Spacer(Modifier.height(10.dp))
+        }
+
+        // The one scroll region: the collection list. weight(1f) lets it grow
+        // when the keyboard is closed and shrink when it opens, always keeping
+        // the finder above and the footer below in view.
+        if (visibleCategories.isEmpty()) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
             ) {
                 Text(
-                    selectedCategoryName?.let { "Save to $it" } ?: "Save without collection",
-                    fontWeight = FontWeight.SemiBold
+                    "No collection matches \"$query\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(10.dp))
+                // Offer to create the thing they searched for, right here.
+                NewCollectionChip(onClick = onCreateCollection)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(visibleCategories, key = { it.id }) { c ->
+                    CollectionResultRow(
+                        name = c.name,
+                        emoji = c.emoji,
+                        color = Color(c.colorHex),
+                        selected = state.selectedCategory == c.id,
+                        suggested = state.selectedCategory == null &&
+                            state.suggestedCategory == c.id,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelectCategory(c.id)
+                        }
+                    )
+                }
             }
         }
+
+        // Pinned bottom: secondary actions + optional details, hidden while
+        // searching so the list keeps the whole sheet. The footer is always
+        // visible so Save is one tap away no matter what.
+        if (!searching) {
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Spacer(Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(end = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item { NewCollectionChip(onClick = onCreateCollection) }
+                    item { RemindMeChip(remindAt = state.remindAt, onClick = onPickReminder) }
+                    if (state.recentItems.isNotEmpty()) {
+                        item { AddToExistingChip(onClick = onAppendExisting) }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                OptionalDetails(
+                    title = state.title,
+                    notes = state.notes,
+                    tagsInput = state.tagsInput,
+                    onTitleChange = onTitleChange,
+                    onNotesChange = onNotesChange,
+                    onTagsChange = onTagsChange,
+                    titleFocus = titleFocus
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+        SaveFooter(
+            isFavorite = state.isFavorite,
+            selectedCategoryName = selectedCategoryName,
+            onToggleFavorite = onToggleFavorite,
+            onSave = onSave
+        )
+    }
+}
+
+/**
+ * Compact one-row item context (thumbnail + title + source) used by the
+ * picker-first layout, where the full-width preview would eat scarce vertical
+ * space that belongs to the collection list.
+ */
+@Composable
+private fun CompactContext(state: SaveSheetState) {
+    val img = state.previewImage ?: state.localUri ?: state.attachments.firstOrNull()
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        if (img != null) {
+            AsyncImage(
+                model = img,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                state.title.ifBlank { "Untitled" },
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Text(
+                "${state.sourceApp.emoji} ${state.sourceApp.displayName}" +
+                    if (state.attachments.size > 1) " · ${state.attachments.size} items" else "",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Sticky bottom action bar shared by both Save-sheet layouts. Hairline top
+ * border separates it from the content above so it reads as a footer.
+ */
+@Composable
+private fun SaveFooter(
+    isFavorite: Boolean,
+    selectedCategoryName: String?,
+    onToggleFavorite: () -> Unit,
+    onSave: () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawLine(
+                    color = Color(0x14000000),
+                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    strokeWidth = stroke
+                )
+            }
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .navigationBarsPadding()
+    ) {
+        // Heart icon stands on its own; contentDescription preserves the
+        // explanation for screen readers.
+        IconButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onToggleFavorite()
+        }) {
+            Icon(
+                if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Button(
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSave()
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Text(
+                selectedCategoryName?.let { "Save to $it" } ?: "Save without collection",
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -846,7 +1008,8 @@ private fun DuplicateBanner(
 @Composable
 private fun CollectionFinder(
     query: String,
-    onQueryChange: (String) -> Unit
+    onQueryChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit = {}
 ) {
     val bring = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
@@ -875,6 +1038,7 @@ private fun CollectionFinder(
             .fillMaxWidth()
             .bringIntoViewRequester(bring)
             .onFocusChanged { focus ->
+                onFocusChanged(focus.isFocused)
                 if (focus.isFocused) {
                     scope.launch {
                         // Wait for the keyboard to finish animating in so the
@@ -903,9 +1067,15 @@ private fun CollectionResultRow(
     emoji: String?,
     color: Color,
     selected: Boolean,
+    suggested: Boolean = false,
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val borderColor = when {
+        selected -> color
+        suggested -> scheme.primary
+        else -> scheme.outline.copy(alpha = 0.4f)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -913,8 +1083,8 @@ private fun CollectionResultRow(
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) color.copy(alpha = 0.16f) else scheme.surface)
             .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) color else scheme.outline.copy(alpha = 0.4f),
+                width = if (selected || suggested) 1.5.dp else 1.dp,
+                color = borderColor,
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick)
@@ -946,6 +1116,12 @@ private fun CollectionResultRow(
                 contentDescription = "Selected",
                 tint = color,
                 modifier = Modifier.size(20.dp)
+            )
+        } else if (suggested) {
+            Text(
+                "Suggested",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = scheme.primary
             )
         }
     }

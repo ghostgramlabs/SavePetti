@@ -50,6 +50,17 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
+import com.ghostgramlabs.pettibox.data.preferences.ReminderTime
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import javax.inject.Inject
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -72,28 +83,39 @@ enum class ReminderPreset(val label: String) {
 /**
  * Returns the wall-clock millis for a preset, or null for CUSTOM (caller
  * shows the picker).
+ *
+ * The hour/minute anchors are user-configurable in Settings: "Tonight" fires
+ * at the evening time; "Tomorrow", "This weekend", and "Next week" fire at the
+ * morning time. The defaults match the historical hard-coded values (9 AM /
+ * 9 PM) so behaviour is unchanged until the user picks their own.
  */
-fun ReminderPreset.toEpochMillis(now: Long = System.currentTimeMillis()): Long? {
+fun ReminderPreset.toEpochMillis(
+    now: Long = System.currentTimeMillis(),
+    morningHour: Int = 9,
+    morningMinute: Int = 0,
+    eveningHour: Int = 21,
+    eveningMinute: Int = 0
+): Long? {
     if (this == ReminderPreset.CUSTOM) return null
     val cal = Calendar.getInstance().apply { timeInMillis = now }
     when (this) {
         ReminderPreset.TONIGHT -> {
-            cal.set(Calendar.HOUR_OF_DAY, 21)
-            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.HOUR_OF_DAY, eveningHour)
+            cal.set(Calendar.MINUTE, eveningMinute)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
             if (cal.timeInMillis <= now) cal.add(Calendar.DAY_OF_MONTH, 1)
         }
         ReminderPreset.TOMORROW -> {
             cal.add(Calendar.DAY_OF_MONTH, 1)
-            cal.set(Calendar.HOUR_OF_DAY, 9)
-            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.HOUR_OF_DAY, morningHour)
+            cal.set(Calendar.MINUTE, morningMinute)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
         }
         ReminderPreset.WEEKEND -> {
-            cal.set(Calendar.HOUR_OF_DAY, 10)
-            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.HOUR_OF_DAY, morningHour)
+            cal.set(Calendar.MINUTE, morningMinute)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
             val daysUntilSaturday = ((Calendar.SATURDAY - cal.get(Calendar.DAY_OF_WEEK)) + 7) % 7
@@ -105,8 +127,8 @@ fun ReminderPreset.toEpochMillis(now: Long = System.currentTimeMillis()): Long? 
         }
         ReminderPreset.NEXT_WEEK -> {
             cal.add(Calendar.DAY_OF_MONTH, 7)
-            cal.set(Calendar.HOUR_OF_DAY, 9)
-            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.HOUR_OF_DAY, morningHour)
+            cal.set(Calendar.MINUTE, morningMinute)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
         }
@@ -192,6 +214,35 @@ private fun formatTimeOnly(hour: Int, minute: Int): String {
     return SimpleDateFormat("h:mm a", Locale.getDefault()).format(cal.time)
 }
 
+private fun sameDay(a: Long, b: Long): Boolean {
+    val ca = Calendar.getInstance().apply { timeInMillis = a }
+    val cb = Calendar.getInstance().apply { timeInMillis = b }
+    return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) &&
+        ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
+}
+
+/**
+ * Exposes the user's configured morning/evening reminder anchors to the
+ * shared [ReminderPickerSheet], so every entry point (save sheet, home,
+ * detail, search, browse) resolves presets against the same Settings values
+ * without each call site having to thread them through.
+ */
+@HiltViewModel
+class ReminderTimePrefsViewModel @Inject constructor(
+    prefs: ReminderPreferences
+) : ViewModel() {
+    val morning: StateFlow<ReminderTime> = prefs.morningTime.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        ReminderTime(ReminderPreferences.DEFAULT_MORNING_HOUR, 0)
+    )
+    val evening: StateFlow<ReminderTime> = prefs.eveningTime.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        ReminderTime(ReminderPreferences.DEFAULT_EVENING_HOUR, 0)
+    )
+}
+
 /**
  * Bottom sheet that offers the four preset reminder times plus a
  * "Custom…" entry. Each row taps through directly to a one-tap save,
@@ -203,10 +254,13 @@ fun ReminderPickerSheet(
     currentRemindAt: Long?,
     onPick: (Long?) -> Unit,
     onCustom: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    timePrefs: ReminderTimePrefsViewModel = hiltViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = LocalHapticFeedback.current
+    val morning by timePrefs.morning.collectAsStateWithLifecycle()
+    val evening by timePrefs.evening.collectAsStateWithLifecycle()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -231,8 +285,27 @@ fun ReminderPickerSheet(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            ReminderPreset.entries.forEach { preset ->
-                val previewMillis = remember(preset) { preset.toEpochMillis() }
+            // Drop "Tonight" once the evening time has already passed:
+            // toEpochMillis would roll it to tomorrow night while the label
+            // still says "Tonight", so the row would read "Tonight → Tomorrow
+            // 9:00 PM" — exactly the "what time will this fire?" confusion
+            // we're trying to remove.
+            val now = remember { System.currentTimeMillis() }
+            val presets = remember(morning, evening) {
+                ReminderPreset.entries.filter { preset ->
+                    if (preset != ReminderPreset.TONIGHT) return@filter true
+                    val at = preset.toEpochMillis(
+                        now, morning.hour, morning.minute, evening.hour, evening.minute
+                    ) ?: return@filter true
+                    sameDay(at, now)
+                }
+            }
+            presets.forEach { preset ->
+                val previewMillis = remember(preset, morning, evening) {
+                    preset.toEpochMillis(
+                        now, morning.hour, morning.minute, evening.hour, evening.minute
+                    )
+                }
                 val isCustom = preset == ReminderPreset.CUSTOM
                 ReminderRow(
                     label = preset.label,
@@ -300,10 +373,16 @@ private fun ReminderRow(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = scheme.onSurface
             )
+            // The exact fire time is the answer to "when will this go off?" —
+            // show it in the accent color at full body size on the presets so
+            // it reads as the row's real value, not a faint afterthought. The
+            // Custom row has no time yet, so it stays a muted instruction.
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isCustom) FontWeight.Normal else FontWeight.SemiBold
+                ),
+                color = if (isCustom) scheme.onSurfaceVariant else scheme.primary
             )
         }
         if (isCustom) {

@@ -26,11 +26,8 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Widget "Quick save" launches us with no shared content — show the
-        // Save sheet in empty/manual mode rather than bailing on hasAnything.
-        val quickSave = intent.getBooleanExtra(EXTRA_QUICK_SAVE, false)
-        val incoming = if (quickSave) IncomingShare() else IncomingShare.from(intent)
-        if (!quickSave && !incoming.hasAnything) {
+        val incoming = IncomingShare.from(intent)
+        if (!incoming.hasAnything) {
             finish(); return
         }
         incomingShare = incoming
@@ -62,17 +59,11 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val quickSave = intent.getBooleanExtra(EXTRA_QUICK_SAVE, false)
-        val incoming = if (quickSave) IncomingShare() else IncomingShare.from(intent)
-        if (!quickSave && !incoming.hasAnything) {
+        val incoming = IncomingShare.from(intent)
+        if (!incoming.hasAnything) {
             finish()
         } else {
             incomingShare = incoming
         }
-    }
-
-    companion object {
-        /** Set by the home-screen widget's Quick save button. */
-        const val EXTRA_QUICK_SAVE = "pettibox.widget.quickSave"
     }
 }

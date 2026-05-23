@@ -15,6 +15,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -118,6 +119,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val now = System.currentTimeMillis()
+        // "This evening" snoozes to the same evening time the user configured
+        // for the "Tonight" preset in Settings, so a snooze from a notification
+        // and a save-time reminder land at the same hour instead of two
+        // different hard-coded ones.
+        val evening = reminderPreferences.eveningTime.first()
         val notif = NotificationCompat.Builder(ctx, ReminderNotifications.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("From your shelf")
@@ -130,7 +136,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             // the whole point of a "remind me later" save. Tapping the body
             // still opens the item.
             .addAction(snoozeAction(ctx, itemId, "Snooze 1h", "1h", now + ONE_HOUR_MS))
-            .addAction(snoozeAction(ctx, itemId, "This evening", "evening", thisEveningMillis(now)))
+            .addAction(
+                snoozeAction(
+                    ctx, itemId, "This evening", "evening",
+                    thisEveningMillis(now, evening.hour, evening.minute)
+                )
+            )
             .build()
         runCatching {
             @SuppressLint("MissingPermission")
@@ -167,12 +178,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         return NotificationCompat.Action.Builder(0, label, pi).build()
     }
 
-    /** Today at 19:00, or tomorrow at 19:00 if it's already past. */
-    private fun thisEveningMillis(now: Long): Long {
+    /** Today at the user's evening time, or tomorrow if it's already past. */
+    private fun thisEveningMillis(now: Long, hour: Int, minute: Int): Long {
         val cal = java.util.Calendar.getInstance().apply {
             timeInMillis = now
-            set(java.util.Calendar.HOUR_OF_DAY, 19)
-            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.HOUR_OF_DAY, hour)
+            set(java.util.Calendar.MINUTE, minute)
             set(java.util.Calendar.SECOND, 0)
             set(java.util.Calendar.MILLISECOND, 0)
         }
