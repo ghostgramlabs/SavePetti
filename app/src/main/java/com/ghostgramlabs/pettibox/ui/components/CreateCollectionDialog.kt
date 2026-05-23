@@ -61,10 +61,11 @@ data class NewCollection(val name: String, val emoji: String, val colorHex: Long
 
 @Composable
 fun CreateCollectionDialog(
+    initialName: String = "",
     onCreate: (NewCollection) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
+    var name by remember(initialName) { mutableStateOf(initialName.take(28)) }
     var emoji by remember { mutableStateOf(CollectionEmojiSeeds.first()) }
     var color by remember { mutableStateOf(CollectionColorSeeds.first()) }
 

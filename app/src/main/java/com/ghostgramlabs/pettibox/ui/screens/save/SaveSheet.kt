@@ -102,6 +102,7 @@ fun SaveSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var showCreate by remember { mutableStateOf(false) }
+    var createInitialName by remember { mutableStateOf("") }
     var showReminderPicker by remember { mutableStateOf(false) }
     var showCustomReminder by remember { mutableStateOf(false) }
     var collectionQuery by remember { mutableStateOf("") }
@@ -155,11 +156,16 @@ fun SaveSheet(
 
     if (showCreate) {
         CreateCollectionDialog(
+            initialName = createInitialName,
             onCreate = { nc ->
                 viewModel.createCollection(nc)
                 showCreate = false
+                createInitialName = ""
             },
-            onDismiss = { showCreate = false }
+            onDismiss = {
+                showCreate = false
+                createInitialName = ""
+            }
         )
     }
 
@@ -231,7 +237,10 @@ fun SaveSheet(
                 onSelectCategory = { viewModel.pickCategory(it) },
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onSave = { viewModel.save() },
-                onCreateCollection = { showCreate = true },
+                onCreateCollection = { initialName ->
+                    createInitialName = initialName.orEmpty()
+                    showCreate = true
+                },
                 onPickReminder = { showReminderPicker = true },
                 onAppendExisting = { viewModel.setMode(SaveMode.PICK_EXISTING) },
                 onTitleChange = viewModel::setTitle,
@@ -371,7 +380,12 @@ fun SaveSheet(
                         }
                     )
                 }
-                item { NewCollectionChip(onClick = { showCreate = true }) }
+                item {
+                    NewCollectionChip(onClick = {
+                        createInitialName = ""
+                        showCreate = true
+                    })
+                }
                 item {
                     RemindMeChip(
                         remindAt = state.remindAt,
@@ -433,7 +447,7 @@ private fun FinderPickerBody(
     onSelectCategory: (String) -> Unit,
     onToggleFavorite: () -> Unit,
     onSave: () -> Unit,
-    onCreateCollection: () -> Unit,
+    onCreateCollection: (String?) -> Unit,
     onPickReminder: () -> Unit,
     onAppendExisting: () -> Unit,
     onTitleChange: (String) -> Unit,
@@ -453,7 +467,8 @@ private fun FinderPickerBody(
             .fillMaxHeight(0.92f)
             .imePadding()
     ) {
-        // Pinned header: context (only when not searching) + Save-to + finder.
+        // Pinned header: tiny context + Save-to + finder. The item never
+        // disappears while the user searches, which keeps the save target clear.
         Column(Modifier.padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(6.dp))
             if (!searching) {
@@ -467,9 +482,9 @@ private fun FinderPickerBody(
                     )
                     Spacer(Modifier.height(12.dp))
                 }
-                CompactContext(state)
-                Spacer(Modifier.height(14.dp))
             }
+            CompactContext(state, dense = searching)
+            Spacer(Modifier.height(if (searching) 10.dp else 14.dp))
             Text(
                 "Save to",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -516,7 +531,10 @@ private fun FinderPickerBody(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(Modifier.height(14.dp))
-                NewCollectionChip(onClick = onCreateCollection)
+                NewCollectionChip(
+                    label = query.trim().takeIf { it.isNotBlank() }?.let { "Create \"$it\"" } ?: "New",
+                    onClick = { onCreateCollection(query.trim().takeIf { it.isNotBlank() }) }
+                )
             }
         } else {
             LazyColumn(
@@ -553,7 +571,7 @@ private fun FinderPickerBody(
                     contentPadding = PaddingValues(end = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { NewCollectionChip(onClick = onCreateCollection) }
+                    item { NewCollectionChip(onClick = { onCreateCollection(null) }) }
                     item { RemindMeChip(remindAt = state.remindAt, onClick = onPickReminder) }
                     if (state.recentItems.isNotEmpty()) {
                         item { AddToExistingChip(onClick = onAppendExisting) }
@@ -571,6 +589,25 @@ private fun FinderPickerBody(
                 )
                 Spacer(Modifier.height(12.dp))
             }
+        } else if (state.selectedCategory != null) {
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                SearchSelectionActions(
+                    selectedCategoryName = selectedCategoryName,
+                    remindAt = state.remindAt,
+                    onPickReminder = onPickReminder
+                )
+                Spacer(Modifier.height(10.dp))
+                OptionalDetails(
+                    title = state.title,
+                    notes = state.notes,
+                    tagsInput = state.tagsInput,
+                    onTitleChange = onTitleChange,
+                    onNotesChange = onNotesChange,
+                    onTagsChange = onTagsChange,
+                    titleFocus = titleFocus
+                )
+                Spacer(Modifier.height(10.dp))
+            }
         }
         SaveFooter(
             isFavorite = state.isFavorite,
@@ -587,7 +624,7 @@ private fun FinderPickerBody(
  * space that belongs to the collection list.
  */
 @Composable
-private fun CompactContext(state: SaveSheetState) {
+private fun CompactContext(state: SaveSheetState, dense: Boolean = false) {
     val img = state.previewImage ?: state.localUri ?: state.attachments.firstOrNull()
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         if (img != null) {
@@ -596,18 +633,18 @@ private fun CompactContext(state: SaveSheetState) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(if (dense) 40.dp else 52.dp)
+                    .clip(RoundedCornerShape(if (dense) 12.dp else 14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(if (dense) 10.dp else 12.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 state.title.ifBlank { "Untitled" },
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 2,
+                maxLines = if (dense) 1 else 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
             Text(
@@ -680,6 +717,54 @@ private fun SaveFooter(
                 fontWeight = FontWeight.SemiBold
             )
         }
+    }
+}
+
+@Composable
+private fun SearchSelectionActions(
+    selectedCategoryName: String?,
+    remindAt: Long?,
+    onPickReminder: () -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            SelectedCollectionPill(selectedCategoryName ?: "collection")
+        }
+        item {
+            RemindMeChip(remindAt = remindAt, onClick = onPickReminder)
+        }
+    }
+}
+
+@Composable
+private fun SelectedCollectionPill(label: String) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(scheme.primary.copy(alpha = 0.14f))
+            .border(1.5.dp, scheme.primary, CircleShape)
+            .padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
+        Icon(
+            Icons.Rounded.Check,
+            contentDescription = null,
+            tint = scheme.primary,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "Selected: $label",
+            style = MaterialTheme.typography.labelLarge,
+            color = scheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1142,7 +1227,7 @@ private fun CollectionResultRow(
 }
 
 @Composable
-private fun NewCollectionChip(onClick: () -> Unit) {
+private fun NewCollectionChip(label: String = "New", onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1160,7 +1245,7 @@ private fun NewCollectionChip(onClick: () -> Unit) {
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            "New",
+            label,
             style = MaterialTheme.typography.labelLarge,
             color = scheme.primary,
             fontWeight = FontWeight.SemiBold
