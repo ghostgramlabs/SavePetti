@@ -15,6 +15,7 @@ import com.ghostgramlabs.pettibox.data.local.SourceCount
 import com.ghostgramlabs.pettibox.data.local.TagDao
 import com.ghostgramlabs.pettibox.data.local.TagEntity
 import com.ghostgramlabs.pettibox.data.local.TagWithCount
+import com.ghostgramlabs.pettibox.data.backup.BackupSummaryCalculator
 import com.ghostgramlabs.pettibox.data.util.AttachmentStore
 import com.ghostgramlabs.pettibox.domain.model.CategoryPalette
 import kotlinx.coroutines.flow.Flow
@@ -151,7 +152,7 @@ class SaveRepository @Inject constructor(
     suspend fun pdfItemsNeedingOcr(): List<SaveItemEntity> = saveDao.pdfItemsNeedingOcr()
 
     suspend fun search(rawQuery: String): List<SaveItemEntity> {
-        val q = sanitizeFtsQuery(rawQuery)
+        val q = SearchQuerySanitizer.sanitizeFtsQuery(rawQuery)
         if (q.isBlank()) return emptyList()
         return runCatching { saveDao.search(q) }.getOrDefault(emptyList())
     }
@@ -550,33 +551,12 @@ class SaveRepository @Inject constructor(
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    /**
-     * Sanitises raw user input for SQLite's FTS MATCH grammar. Strips control
-     * chars, requires tokens of >=2 chars, appends a prefix wildcard so partial
-     * words match. Returning a blank string short-circuits the search to an
-     * empty result without ever touching the DB.
-     */
-    private fun sanitizeFtsQuery(input: String): String {
-        val cleaned = input.trim().replace("\"", " ").replace(Regex("[^\\p{L}\\p{N} ]+"), " ")
-        val tokens = cleaned.split(Regex("\\s+")).filter { it.length >= 2 }
-        if (tokens.isEmpty()) return ""
-        return tokens.joinToString(" ") { "$it*" }
-    }
-
     private fun backupSummary(
         saves: List<SaveItemEntity>,
         attachments: List<AttachmentEntity>,
         tags: List<TagEntity>,
         itemTags: List<ItemTagCrossRef>
-    ): JSONObject = JSONObject()
-        .put("saves", saves.size)
-        .put("attachments", attachments.size)
-        .put("favorites", saves.count { it.isFavorite })
-        .put("pinned", saves.count { it.isPinned })
-        .put("archived", saves.count { it.isArchived })
-        .put("reminders", saves.count { it.remindAt != null })
-        .put("tags", tags.size)
-        .put("tagLinks", itemTags.size)
+    ): JSONObject = BackupSummaryCalculator.summarize(saves, attachments, tags, itemTags)
 
     private fun safeExt(uri: String): String {
         val clean = uri.substringBefore('?').substringAfterLast('/', uri).substringAfterLast('.', "bin")

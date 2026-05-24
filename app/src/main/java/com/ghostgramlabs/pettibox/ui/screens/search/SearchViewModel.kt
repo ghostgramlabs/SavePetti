@@ -8,6 +8,7 @@ import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.domain.model.ContentType
+import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.FlowPreview
@@ -31,9 +32,11 @@ data class SearchState(
     val categoryFilter: String? = null,
     val typeFilter: ContentType? = null,
     val tagFilter: String? = null,
+    val reminderFilter: Boolean = false,
     val results: List<SaveItemEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
     val knownTags: List<String> = emptyList(),
+    val sources: List<SourceApp> = emptyList(),
     val sort: SearchSort = SearchSort.RELEVANT
 )
 
@@ -49,7 +52,8 @@ private data class Filters(
     val source: String?,
     val category: String?,
     val type: ContentType?,
-    val tag: String?
+    val tag: String?,
+    val reminders: Boolean
 )
 
 @OptIn(FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -65,11 +69,12 @@ class SearchViewModel @Inject constructor(
     private val _categoryFilter = MutableStateFlow<String?>(null)
     private val _typeFilter = MutableStateFlow<ContentType?>(null)
     private val _tagFilter = MutableStateFlow<String?>(null)
+    private val _reminderFilter = MutableStateFlow(false)
     private val _sort = MutableStateFlow(SearchSort.RELEVANT)
 
     private val filters = combine(
-        _sourceFilter, _categoryFilter, _typeFilter, _tagFilter
-    ) { src, cat, type, tag -> Filters(src, cat, type, tag) }
+        _sourceFilter, _categoryFilter, _typeFilter, _tagFilter, _reminderFilter
+    ) { src, cat, type, tag, reminders -> Filters(src, cat, type, tag, reminders) }
 
     private val candidates: StateFlow<List<SaveItemEntity>> = combine(
         _query
@@ -79,7 +84,8 @@ class SearchViewModel @Inject constructor(
     ) { q, f -> q to f }
         .flatMapLatest { (q, f) ->
             flow {
-                val haveFilters = f.source != null || f.category != null || f.type != null || f.tag != null
+                val haveFilters = f.source != null || f.category != null ||
+                    f.type != null || f.tag != null || f.reminders
                 emit(
                     when {
                         q.isNotBlank() -> repo.search(q)
@@ -106,8 +112,12 @@ class SearchViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    private val knownSources = repo.observeSourceCounts().map { counts ->
+        counts.mapNotNull { sc -> runCatching { SourceApp.valueOf(sc.source) }.getOrNull() }
+    }
+
     val state: StateFlow<SearchState> = combine(
-        _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet, _sort
+        _query, filters, candidates, repo.observeCategories(), knownTags, tagItemIdSet, _sort, knownSources
     ) { args ->
         // See HomeViewModel: combine(vararg) erases types through Array<Any?>
         // and each cast emits its own warning. Suppress per-line.
@@ -122,11 +132,14 @@ class SearchViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val tagIds = args[5] as Set<Long>?
         val sort = args[6] as SearchSort
+        @Suppress("UNCHECKED_CAST")
+        val sources = args[7] as List<SourceApp>
 
         val filtered = candidates.filter { item ->
-            (f.source == null || item.sourceApp == f.source) &&
+                (f.source == null || item.sourceApp == f.source) &&
                 (f.category == null || item.categoryId == f.category) &&
                 (f.type == null || item.contentType == f.type.name) &&
+                (!f.reminders || (item.remindAt ?: 0L) > System.currentTimeMillis()) &&
                 (tagIds == null || item.id in tagIds)
         }.let { list ->
             when (sort) {
@@ -146,9 +159,11 @@ class SearchViewModel @Inject constructor(
             categoryFilter = f.category,
             typeFilter = f.type,
             tagFilter = f.tag,
+            reminderFilter = f.reminders,
             results = filtered,
             categories = cats,
             knownTags = tags,
+            sources = sources,
             sort = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchState())
@@ -165,16 +180,23 @@ class SearchViewModel @Inject constructor(
         _categoryFilter.value = if (_categoryFilter.value == id) null else id
     }
     fun toggleType(t: ContentType) {
-        _typeFilter.value = if (_typeFilter.value == t) null else t
+        val next = if (_typeFilter.value == t) null else t
+        _typeFilter.value = next
+        if (next != null && _query.value.isBlank()) _sort.value = SearchSort.NEWEST
     }
     fun toggleTag(t: String) {
         _tagFilter.value = if (_tagFilter.value.equals(t, ignoreCase = true)) null else t
+    }
+    fun toggleReminders() {
+        _reminderFilter.value = !_reminderFilter.value
+        if (_reminderFilter.value) _sort.value = SearchSort.REMINDER
     }
     fun clearFilters() {
         _sourceFilter.value = null
         _categoryFilter.value = null
         _typeFilter.value = null
         _tagFilter.value = null
+        _reminderFilter.value = false
     }
 
     fun setSort(sort: SearchSort) {
@@ -204,6 +226,27 @@ class SearchViewModel @Inject constructor(
         repo.update(item.copy(categoryId = categoryId, updatedAt = System.currentTimeMillis()))
     }
     fun delete(item: SaveItemEntity) = viewModelScope.launch {
+        ReminderScheduler.cancel(appContext, item.id)
+        repo.delete(item.id)
+    }
+
+    suspend fun stageDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, true)
+        if (item.remindAt != null) {
+            repo.setRemindAt(item.id, null)
+            ReminderScheduler.cancel(appContext, item.id)
+        }
+    }
+
+    suspend fun undoStagedDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, item.isArchived)
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            repo.setRemindAt(item.id, item.remindAt)
+            ReminderScheduler.schedule(appContext, item.id, item.remindAt)
+        }
+    }
+
+    suspend fun deletePermanently(item: SaveItemEntity) {
         ReminderScheduler.cancel(appContext, item.id)
         repo.delete(item.id)
     }

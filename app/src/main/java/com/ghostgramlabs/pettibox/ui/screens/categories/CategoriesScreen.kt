@@ -48,12 +48,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +84,7 @@ import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
 import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.toLongHex
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +106,8 @@ fun CategoriesScreen(
     val categoriesById = remember(state.categories) {
         state.categories.associateBy { it.id }
     }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     if (showDeleteCategory && selectedCategory?.userCreated == true) {
         AlertDialog(
@@ -136,6 +143,20 @@ fun CategoriesScreen(
     var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     val requestNotificationPermission = rememberNotificationPermissionRequester()
+    val requestDelete: (SaveItemEntity) -> Unit = { item ->
+        scope.launch {
+            viewModel.stageDelete(item)
+            val result = snackbarHostState.showSnackbar(
+                message = "Moved to Archive",
+                actionLabel = "Undo"
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoStagedDelete(item)
+            } else {
+                viewModel.deletePermanently(item)
+            }
+        }
+    }
 
     quickActionItem?.let { item ->
         QuickActionSheet(
@@ -146,7 +167,7 @@ fun CategoriesScreen(
             onToggleArchive = { viewModel.toggleArchived(item) },
             onRemind = { reminderItem = item },
             onMoveTo = { id -> viewModel.moveTo(item, id) },
-            onDelete = { viewModel.delete(item) },
+            onDelete = { requestDelete(item) },
             onDismiss = { quickActionItem = null }
         )
     }
@@ -177,7 +198,8 @@ fun CategoriesScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             when (destination) {
@@ -218,8 +240,19 @@ fun CategoriesScreen(
                         selectedItems = emptySet()
                     },
                     onDeleteSelected = { items ->
-                        viewModel.deleteItems(items)
                         selectedItems = emptySet()
+                        scope.launch {
+                            viewModel.stageDeleteItems(items)
+                            val result = snackbarHostState.showSnackbar(
+                                message = if (items.size == 1) "Moved to Archive" else "${items.size} saves moved to Archive",
+                                actionLabel = "Undo"
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                viewModel.undoStagedDeleteItems(items)
+                            } else {
+                                viewModel.deleteItemsPermanently(items)
+                            }
+                        }
                     },
                     onOpenItem = onOpenItem,
                     onLongPressItem = { quickActionItem = it },
@@ -635,7 +668,7 @@ private fun DrillView(
         AlertDialog(
             onDismissRequest = { showBulkDeleteConfirm = false },
             title = { Text("Delete ${selectedVisibleItems.size} selected?") },
-            text = { Text("This is permanent. Archive keeps saves searchable if you may need them later.") },
+            text = { Text("PettiBox moves them to Archive first and gives you Undo. Archive instead if you want to keep them searchable.") },
             confirmButton = {
                 TextButton(onClick = {
                     showBulkDeleteConfirm = false

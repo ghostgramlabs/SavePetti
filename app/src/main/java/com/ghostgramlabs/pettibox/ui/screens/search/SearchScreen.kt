@@ -3,6 +3,8 @@
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -39,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +67,7 @@ import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SearchField
 import com.ghostgramlabs.pettibox.ui.components.SectionHeader
 import com.ghostgramlabs.pettibox.ui.components.rememberNotificationPermissionRequester
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,12 +86,28 @@ fun SearchScreen(
     val categoriesById = remember(state.categories) {
         state.categories.associateBy { it.id }
     }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Long-press quick-action plumbing — identical pattern to HomeScreen.
     var quickActionItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     val requestNotificationPermission = rememberNotificationPermissionRequester()
+    val requestDelete: (SaveItemEntity) -> Unit = { item ->
+        scope.launch {
+            viewModel.stageDelete(item)
+            val result = snackbarHostState.showSnackbar(
+                message = "Moved to Archive",
+                actionLabel = "Undo"
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoStagedDelete(item)
+            } else {
+                viewModel.deletePermanently(item)
+            }
+        }
+    }
 
     quickActionItem?.let { item ->
         QuickActionSheet(
@@ -95,7 +118,7 @@ fun SearchScreen(
             onToggleArchive = { viewModel.toggleArchived(item) },
             onRemind = { reminderItem = item },
             onMoveTo = { id -> viewModel.moveTo(item, id) },
-            onDelete = { viewModel.delete(item) },
+            onDelete = { requestDelete(item) },
             onDismiss = { quickActionItem = null }
         )
     }
@@ -135,7 +158,7 @@ fun SearchScreen(
 
     val activeFilterCount = listOfNotNull(
         state.typeFilter, state.categoryFilter, state.sourceFilter, state.tagFilter
-    ).size
+    ).size + if (state.reminderFilter) 1 else 0
 
     if (showFilters) {
         ModalBottomSheet(
@@ -150,6 +173,7 @@ fun SearchScreen(
                 onToggleCategory = viewModel::toggleCategory,
                 onToggleSource = viewModel::toggleSource,
                 onToggleTag = viewModel::toggleTag,
+                onToggleReminders = viewModel::toggleReminders,
                 onClear = viewModel::clearFilters,
                 onClose = { showFilters = false }
             )
@@ -158,7 +182,8 @@ fun SearchScreen(
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0)
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             ScreenHeading(
@@ -183,7 +208,8 @@ fun SearchScreen(
                 onToggleType = viewModel::toggleType,
                 onToggleCategory = viewModel::toggleCategory,
                 onToggleSource = viewModel::toggleSource,
-                onToggleTag = viewModel::toggleTag
+                onToggleTag = viewModel::toggleTag,
+                onToggleReminders = viewModel::toggleReminders
             )
             if (state.results.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -200,23 +226,21 @@ fun SearchScreen(
                 // separately-centered EmptyState, which read as two
                 // disjoint screens. Now they share one composition.
                 state.query.isBlank() && !anyFilter -> {
-                    Spacer(Modifier.height(8.dp))
-                    SectionHeader(
-                        title = "Try a starter",
-                        subtitle = "Filter by what kind of save"
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    QuickSearchSuggestions(onToggleType = viewModel::toggleType)
-                    EmptyState(
-                        emoji = "\uD83D\uDD0D",
-                        headline = "Find anything you stashed",
-                        body = "Type a word from a title, note, source, link, tag, or English text inside an image or PDF. Other languages may be partial."
+                    SearchDiscovery(
+                        tags = state.knownTags,
+                        sources = state.sources,
+                        onToggleType = viewModel::toggleType,
+                        onToggleTag = viewModel::toggleTag,
+                        onToggleSource = viewModel::toggleSource,
+                        onToggleReminders = viewModel::toggleReminders
                     )
                 }
-                state.results.isEmpty() -> EmptyState(
-                    emoji = "\uD83E\uDD14",
-                    headline = "Nothing matched",
-                    body = "Try a shorter word, drop a filter, or check the spelling. OCR works best with English and may still be catching up."
+                state.results.isEmpty() -> NoResultsRecovery(
+                    query = state.query,
+                    hasFilters = anyFilter,
+                    onClearFilters = viewModel::clearFilters,
+                    onClearQuery = { viewModel.onQuery("") },
+                    onOpenFilters = { showFilters = true }
                 )
                 else -> {
                     LazyVerticalStaggeredGrid(
@@ -277,8 +301,63 @@ private fun SearchSortStrip(selected: SearchSort, onSelect: (SearchSort) -> Unit
 }
 
 @Composable
-private fun QuickSearchSuggestions(
-    onToggleType: (ContentType) -> Unit
+private fun SearchDiscovery(
+    tags: List<String>,
+    sources: List<SourceApp>,
+    onToggleType: (ContentType) -> Unit,
+    onToggleTag: (String) -> Unit,
+    onToggleSource: (String) -> Unit,
+    onToggleReminders: () -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+    ) {
+        Spacer(Modifier.height(8.dp))
+        SectionHeader(
+            title = "Start anywhere",
+            subtitle = "Use a type, source, or tag when you don't remember the exact words"
+        )
+        Spacer(Modifier.height(8.dp))
+        SuggestionGroupTitle("Types")
+        QuickTypeSuggestions(
+            onToggleType = onToggleType,
+            onToggleReminders = onToggleReminders
+        )
+        if (sources.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            SuggestionGroupTitle("Sources")
+            QuickSourceSuggestions(sources = sources, onToggleSource = onToggleSource)
+        }
+        if (tags.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            SuggestionGroupTitle("Tags")
+            QuickTagSuggestions(tags = tags, onToggleTag = onToggleTag)
+        }
+        Spacer(Modifier.height(18.dp))
+        EmptyState(
+            emoji = "\uD83D\uDD0D",
+            headline = "Find anything you stashed",
+            body = "Search titles, notes, links, sources, tags, and English text inside images or PDFs. Archive is included, so tucked-away saves still show up."
+        )
+    }
+}
+
+@Composable
+private fun SuggestionGroupTitle(title: String) {
+    Text(
+        title.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+    )
+}
+
+@Composable
+private fun QuickTypeSuggestions(
+    onToggleType: (ContentType) -> Unit,
+    onToggleReminders: () -> Unit
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -316,6 +395,16 @@ private fun QuickSearchSuggestions(
         }
         item {
             CategoryChip(
+                label = "Upcoming reminders",
+                emoji = "\u23F0",
+                color = Color(0xFF2F9B8F),
+                selected = false,
+                tilt = 1.5f,
+                onClick = onToggleReminders
+            )
+        }
+        item {
+            CategoryChip(
                 label = "Notes",
                 emoji = "\uD83D\uDDD2",
                 color = MaterialTheme.colorScheme.primary,
@@ -323,6 +412,115 @@ private fun QuickSearchSuggestions(
                 tilt = 1.5f,
                 onClick = { onToggleType(ContentType.NOTE) }
             )
+        }
+    }
+}
+
+@Composable
+private fun QuickTagSuggestions(
+    tags: List<String>,
+    onToggleTag: (String) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        tags.take(8).forEachIndexed { index, tag ->
+            item(key = "tag-$tag") {
+                CategoryChip(
+                    label = "#$tag",
+                    emoji = null,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    selected = false,
+                    tilt = if (index % 2 == 0) -2f else 1.5f,
+                    onClick = { onToggleTag(tag) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickSourceSuggestions(
+    sources: List<SourceApp>,
+    onToggleSource: (String) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        sources.take(8).forEachIndexed { index, source ->
+            item(key = "source-${source.name}") {
+                CategoryChip(
+                    label = source.displayName,
+                    emoji = source.emoji,
+                    color = MaterialTheme.colorScheme.secondary,
+                    selected = false,
+                    tilt = if (index % 2 == 0) 1.5f else -2f,
+                    onClick = { onToggleSource(source.name) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoResultsRecovery(
+    query: String,
+    hasFilters: Boolean,
+    onClearFilters: () -> Unit,
+    onClearQuery: () -> Unit,
+    onOpenFilters: () -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+    ) {
+        EmptyState(
+            emoji = "\uD83E\uDD14",
+            headline = "Nothing matched",
+            body = "Try a shorter word, remove a filter, or search another source. OCR works best with English and may still be catching up."
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (hasFilters) {
+                item {
+                    CategoryChip(
+                        label = "Clear filters",
+                        emoji = "\u2715",
+                        color = MaterialTheme.colorScheme.primary,
+                        selected = false,
+                        tilt = -2f,
+                        onClick = onClearFilters
+                    )
+                }
+            }
+            if (query.isNotBlank()) {
+                item {
+                    CategoryChip(
+                        label = "Clear search",
+                        emoji = "\uD83D\uDD0D",
+                        color = MaterialTheme.colorScheme.secondary,
+                        selected = false,
+                        tilt = 1.5f,
+                        onClick = onClearQuery
+                    )
+                }
+            }
+            item {
+                CategoryChip(
+                    label = "Change filters",
+                    emoji = "\u2699",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    selected = false,
+                    tilt = -2f,
+                    onClick = onOpenFilters
+                )
+            }
         }
     }
 }
@@ -336,7 +534,8 @@ private fun FilterToolbar(
     onToggleType: (ContentType) -> Unit,
     onToggleCategory: (String) -> Unit,
     onToggleSource: (String) -> Unit,
-    onToggleTag: (String) -> Unit
+    onToggleTag: (String) -> Unit,
+    onToggleReminders: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
     Row(
@@ -408,6 +607,9 @@ private fun FilterToolbar(
             state.tagFilter?.let { tag ->
                 item { ActivePill("#$tag") { onToggleTag(tag) } }
             }
+            if (state.reminderFilter) {
+                item { ActivePill("Upcoming reminders") { onToggleReminders() } }
+            }
         }
     }
 }
@@ -446,6 +648,7 @@ private fun FilterSheetBody(
     onToggleCategory: (String) -> Unit,
     onToggleSource: (String) -> Unit,
     onToggleTag: (String) -> Unit,
+    onToggleReminders: () -> Unit,
     onClear: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -478,6 +681,16 @@ private fun FilterSheetBody(
                     selected = state.typeFilter == t,
                     tilt = if (idx % 2 == 0) -2f else 1.5f,
                     onClick = { onToggleType(t) }
+                )
+            }
+            item {
+                CategoryChip(
+                    label = "Upcoming reminders",
+                    emoji = "\u23F0",
+                    color = Color(0xFF2F9B8F),
+                    selected = state.reminderFilter,
+                    tilt = -2f,
+                    onClick = onToggleReminders
                 )
             }
         }

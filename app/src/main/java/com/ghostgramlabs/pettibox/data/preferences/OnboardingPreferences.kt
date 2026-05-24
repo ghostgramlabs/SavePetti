@@ -3,6 +3,7 @@ package com.ghostgramlabs.pettibox.data.preferences
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,7 @@ class OnboardingPreferences @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val completedKey = booleanPreferencesKey("home_onboarding_completed")
+    private val handledBackupKey = stringPreferencesKey("handled_backup_restore_file")
 
     val showHomeOnboarding: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
         prefs[completedKey] != true
@@ -25,6 +27,16 @@ class OnboardingPreferences @Inject constructor(
     suspend fun markHomeOnboardingComplete() {
         context.onboardingDataStore.edit { prefs ->
             prefs[completedKey] = true
+        }
+    }
+
+    val handledBackupRestoreFile: Flow<String?> = context.onboardingDataStore.data.map { prefs ->
+        prefs[handledBackupKey]
+    }
+
+    suspend fun markBackupRestorePromptHandled(fileName: String) {
+        context.onboardingDataStore.edit { prefs ->
+            prefs[handledBackupKey] = fileName
         }
     }
 }

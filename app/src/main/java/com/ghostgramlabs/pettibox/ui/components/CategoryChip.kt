@@ -17,6 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
@@ -46,7 +52,13 @@ fun CategoryChip(
     // buttons. Dark mode keeps its original tint + visible hairline.
     val light = isLightTheme()
     val bg = if (selected) color else color.copy(alpha = if (light) 0.24f else 0.14f)
-    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val fg = if (selected && color.luminance() > 0.55f) {
+        Color(0xFF2B2118)
+    } else if (selected) {
+        Color.White
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     val borderWidth = when {
         selected -> 0.dp
         suggested -> 2.dp
@@ -72,6 +84,15 @@ fun CategoryChip(
                 color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
+            .semantics {
+                role = Role.Button
+                this.selected = selected
+                stateDescription = when {
+                    selected -> "Selected"
+                    suggested -> "Suggested"
+                    else -> "Not selected"
+                }
+            }
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {

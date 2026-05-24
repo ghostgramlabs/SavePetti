@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -211,14 +212,16 @@ fun SaveSheet(
                     c.name.contains(q, ignoreCase = true) || c.emoji.contains(q)
                 }
             }
-            // One ordering: suggested first, then recently-used by recency,
-            // then the rest by sort order. Each collection appears once.
+            // Save is habit-driven: show the likely match first, then the
+            // user's recent shelves, then their custom shelves, then starter
+            // collections. Each collection appears once.
             val recentRank = state.recentCategoryIds.withIndex()
                 .associate { (i, id) -> id to i }
             filtered.sortedWith(
                 compareBy(
                     { if (it.id == suggested) -1 else 0 },
                     { recentRank[it.id] ?: Int.MAX_VALUE },
+                    { if (it.userCreated) 0 else 1 },
                     { it.sortOrder }
                 )
             )
@@ -544,7 +547,15 @@ private fun FinderPickerBody(
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(visibleCategories, key = { it.id }) { c ->
+                itemsIndexed(visibleCategories, key = { _, c -> c.id }) { index, c ->
+                    val previous = visibleCategories.getOrNull(index - 1)
+                    val group = collectionGroupLabel(c, state.suggestedCategory, state.recentCategoryIds)
+                    val previousGroup = previous?.let {
+                        collectionGroupLabel(it, state.suggestedCategory, state.recentCategoryIds)
+                    }
+                    if (index == 0 || group != previousGroup) {
+                        CollectionGroupLabel(group)
+                    }
                     CollectionResultRow(
                         name = c.name,
                         emoji = c.emoji,
@@ -1162,6 +1173,27 @@ private fun CollectionFinder(
  * tint of the collection color and shows a check. Easier to hit than a chip
  * in a horizontal strip, and the check makes the current pick unambiguous.
  */
+@Composable
+private fun CollectionGroupLabel(label: String) {
+    Text(
+        label.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+    )
+}
+
+private fun collectionGroupLabel(
+    category: CategoryEntity,
+    suggestedCategory: String?,
+    recentCategoryIds: List<String>
+): String = when {
+    category.id == suggestedCategory -> "Suggested"
+    category.id in recentCategoryIds -> "Recently used"
+    category.userCreated -> "Your collections"
+    else -> "Starter collections"
+}
+
 @Composable
 private fun CollectionResultRow(
     name: String,

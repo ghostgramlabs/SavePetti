@@ -12,16 +12,19 @@ import com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
 import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
+import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -30,6 +33,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SourceCount(val source: String, val emoji: String, val display: String, val count: Int)
+
+data class BackupRestoreCandidate(
+    val fileName: String,
+    val modifiedAt: Long,
+    val sizeBytes: Long
+)
 
 data class HomeState(
     val isLoading: Boolean = true,
@@ -45,7 +54,8 @@ data class HomeState(
     val archivedCount: Int = 0,
     val isIndexingText: Boolean = false,
     val notificationsBlocked: Boolean = false,
-    val showOnboarding: Boolean = false
+    val showOnboarding: Boolean = false,
+    val backupRestoreCandidate: BackupRestoreCandidate? = null
 )
 
 @HiltViewModel
@@ -53,9 +63,25 @@ class HomeViewModel @Inject constructor(
     private val repo: SaveRepository,
     private val onboardingPreferences: OnboardingPreferences,
     private val reminderPreferences: ReminderPreferences,
+    private val localBackupStore: LocalBackupStore,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     private val isTextIndexing = textIndexingFlow(appContext)
+    private val backupRestoreCandidate = MutableStateFlow<BackupRestoreCandidate?>(null)
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val latest = localBackupStore.latestBackupFile() ?: return@launch
+            val handledFile = onboardingPreferences.handledBackupRestoreFile.first()
+            if (handledFile != latest.name) {
+                backupRestoreCandidate.value = BackupRestoreCandidate(
+                    fileName = latest.name,
+                    modifiedAt = latest.lastModified(),
+                    sizeBytes = latest.length()
+                )
+            }
+        }
+    }
 
     /**
      * Each component flow is bounded — recent/pinned/favorites are LIMITed in
@@ -72,7 +98,8 @@ class HomeViewModel @Inject constructor(
         repo.observeArchivedTotal(),
         isTextIndexing,
         reminderPreferences.notificationsBlocked,
-        onboardingPreferences.showHomeOnboarding
+        onboardingPreferences.showHomeOnboarding,
+        backupRestoreCandidate
     ) { args ->
         // combine(vararg) returns Array<Any?> at runtime — the per-cast
         // unchecked-cast warnings are unavoidable and noisy; we accept the
@@ -93,6 +120,7 @@ class HomeViewModel @Inject constructor(
         val indexing = args[7] as Boolean
         val notificationsBlocked = args[8] as Boolean
         val showOnboarding = args[9] as Boolean
+        val backupCandidate = args[10] as BackupRestoreCandidate?
 
         val sources = rawCounts.mapNotNull { sc ->
             val sa = runCatching { SourceApp.valueOf(sc.source) }.getOrNull() ?: return@mapNotNull null
@@ -110,7 +138,8 @@ class HomeViewModel @Inject constructor(
             archivedCount = archived,
             isIndexingText = indexing,
             notificationsBlocked = notificationsBlocked,
-            showOnboarding = showOnboarding
+            showOnboarding = showOnboarding,
+            backupRestoreCandidate = backupCandidate
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
@@ -145,7 +174,43 @@ class HomeViewModel @Inject constructor(
         repo.delete(item.id)
     }
 
+    suspend fun stageDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, true)
+        if (item.remindAt != null) {
+            repo.setRemindAt(item.id, null)
+            ReminderScheduler.cancel(appContext, item.id)
+        }
+    }
+
+    suspend fun undoStagedDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, item.isArchived)
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            repo.setRemindAt(item.id, item.remindAt)
+            ReminderScheduler.schedule(appContext, item.id, item.remindAt)
+        }
+    }
+
+    suspend fun deletePermanently(item: SaveItemEntity) {
+        ReminderScheduler.cancel(appContext, item.id)
+        repo.delete(item.id)
+    }
+
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
+
+    suspend fun importDiscoveredBackup(): SaveRepository.BackupImportResult? {
+        val file = localBackupStore.latestBackupFile() ?: return null
+        val result = file.inputStream().use { input -> repo.importBackupZip(input) }
+        onboardingPreferences.markBackupRestorePromptHandled(file.name)
+        backupRestoreCandidate.value = null
+        ReminderScheduler.rescheduleAll(appContext, repo)
+        return result
+    }
+
+    fun skipDiscoveredBackup() = viewModelScope.launch {
+        val fileName = backupRestoreCandidate.value?.fileName ?: localBackupStore.latestBackupFile()?.name ?: return@launch
+        onboardingPreferences.markBackupRestorePromptHandled(fileName)
+        backupRestoreCandidate.value = null
+    }
 
     fun completeOnboarding() = viewModelScope.launch {
         onboardingPreferences.markHomeOnboardingComplete()

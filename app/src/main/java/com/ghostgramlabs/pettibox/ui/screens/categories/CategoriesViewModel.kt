@@ -240,6 +240,27 @@ class CategoriesViewModel @Inject constructor(
         repo.delete(item.id)
     }
 
+    suspend fun stageDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, true)
+        if (item.remindAt != null) {
+            repo.setRemindAt(item.id, null)
+            ReminderScheduler.cancel(appContext, item.id)
+        }
+    }
+
+    suspend fun undoStagedDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, item.isArchived)
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            repo.setRemindAt(item.id, item.remindAt)
+            ReminderScheduler.schedule(appContext, item.id, item.remindAt)
+        }
+    }
+
+    suspend fun deletePermanently(item: SaveItemEntity) {
+        ReminderScheduler.cancel(appContext, item.id)
+        repo.delete(item.id)
+    }
+
     fun archiveItems(items: List<SaveItemEntity>) = viewModelScope.launch {
         items.forEach { item ->
             repo.setArchived(item.id, true)
@@ -255,5 +276,17 @@ class CategoriesViewModel @Inject constructor(
             ReminderScheduler.cancel(appContext, item.id)
             repo.delete(item.id)
         }
+    }
+
+    suspend fun stageDeleteItems(items: List<SaveItemEntity>) {
+        items.forEach { stageDelete(it) }
+    }
+
+    suspend fun undoStagedDeleteItems(items: List<SaveItemEntity>) {
+        items.forEach { undoStagedDelete(it) }
+    }
+
+    suspend fun deleteItemsPermanently(items: List<SaveItemEntity>) {
+        items.forEach { deletePermanently(it) }
     }
 }

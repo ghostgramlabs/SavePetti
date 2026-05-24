@@ -9,17 +9,17 @@ A calm, colorful, offline-first Android app that lives in the Android share shee
 You need:
 - Android Studio Hedgehog (2023.1.1) or newer
 - JDK 17
-- Android SDK 34
+- Android SDK 35
 
 Open this project folder in Android Studio. Let it sync Gradle, then run on a device or emulator (`minSdk 24`).
 
 Or from a shell with the wrapper:
 
 ```bash
-gradlew :app:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
-If the wrapper scripts are missing locally, use Android Studio's Gradle integration or restore `gradlew` / `gradlew.bat` and `gradle-wrapper.jar`.
+On Windows PowerShell, use `.\gradlew.bat :app:assembleDebug`.
 
 ## What's Where
 

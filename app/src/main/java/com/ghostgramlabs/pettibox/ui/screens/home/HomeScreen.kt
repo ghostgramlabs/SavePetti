@@ -51,6 +51,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -59,6 +60,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -66,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +100,7 @@ import com.ghostgramlabs.pettibox.ui.components.SectionHeader
 import com.ghostgramlabs.pettibox.ui.screens.save.IncomingShare
 import com.ghostgramlabs.pettibox.ui.screens.save.SaveSheet
 import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -106,6 +112,8 @@ fun HomeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     // Category lookups happen per-card per-recomposition on every scroll
     // frame. The list grew from O(1) categories to a few dozen as users
     // create their own — the linear scan was hot enough to show up in the
@@ -132,6 +140,7 @@ fun HomeScreen(
     var showChooser by remember { mutableStateOf(false) }
     var showLinkDialog by remember { mutableStateOf(false) }
     var pendingShare by remember { mutableStateOf<IncomingShare?>(null) }
+    var isImportingDiscoveredBackup by remember { mutableStateOf(false) }
 
     val pickImages = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
@@ -159,7 +168,76 @@ fun HomeScreen(
 
     val openQuickNote = { pendingShare = IncomingShare() }
 
-    if (state.showOnboarding && !state.isLoading) {
+    val shouldOfferBackupRestore = !state.isLoading &&
+        state.totalCount == 0 &&
+        state.archivedCount == 0 &&
+        state.backupRestoreCandidate != null
+
+    if (shouldOfferBackupRestore) {
+        val candidate = state.backupRestoreCandidate
+        AlertDialog(
+            onDismissRequest = {
+                if (!isImportingDiscoveredBackup) viewModel.skipDiscoveredBackup()
+            },
+            title = { Text("Restore your PettiBox?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("We found a backup in the PettiBox backup folder. Import it to bring your saves, collections, tags, reminders, and attachments back.")
+                    Text(
+                        "PettiBox only checks its own backup folder automatically. If your backup is somewhere else, skip this and choose the file from Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (candidate != null) {
+                        Text(
+                            "${candidate.fileName} • ${formatBackupSize(candidate.sizeBytes)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isImportingDiscoveredBackup,
+                    onClick = {
+                        scope.launch {
+                            isImportingDiscoveredBackup = true
+                            val result = runCatching { viewModel.importDiscoveredBackup() }
+                            isImportingDiscoveredBackup = false
+                            result
+                                .onSuccess { imported ->
+                                    if (imported != null) {
+                                        snackbarHostState.showSnackbar("Restored ${imported.saves} saves from backup")
+                                    } else {
+                                        snackbarHostState.showSnackbar("Backup was no longer available")
+                                    }
+                                }
+                                .onFailure {
+                                    snackbarHostState.showSnackbar("Couldn't import that backup")
+                                }
+                        }
+                    }
+                ) {
+                    if (isImportingDiscoveredBackup) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (isImportingDiscoveredBackup) "Importing" else "Import")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isImportingDiscoveredBackup,
+                    onClick = { viewModel.skipDiscoveredBackup() }
+                ) { Text("Skip") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    } else if (state.showOnboarding && !state.isLoading) {
         HomeOnboardingDialog(
             onDismiss = viewModel::completeOnboarding,
             onAdd = {
@@ -227,6 +305,20 @@ fun HomeScreen(
     var reminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     var customReminderItem by remember { mutableStateOf<SaveItemEntity?>(null) }
     val requestNotificationPermission = rememberNotificationPermissionRequester()
+    val requestDelete: (SaveItemEntity) -> Unit = { item ->
+        scope.launch {
+            viewModel.stageDelete(item)
+            val result = snackbarHostState.showSnackbar(
+                message = "Moved to Archive",
+                actionLabel = "Undo"
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoStagedDelete(item)
+            } else {
+                viewModel.deletePermanently(item)
+            }
+        }
+    }
 
     quickActionItem?.let { item ->
         QuickActionSheet(
@@ -237,7 +329,7 @@ fun HomeScreen(
             onToggleArchive = { viewModel.toggleArchived(item) },
             onRemind = { reminderItem = item },
             onMoveTo = { id -> viewModel.moveTo(item, id) },
-            onDelete = { viewModel.delete(item) },
+            onDelete = { requestDelete(item) },
             onDismiss = { quickActionItem = null }
         )
     }
@@ -274,6 +366,7 @@ fun HomeScreen(
         // bottom-nav insets — re-applying them here is what created the
         // double-padded gap above the bottom nav and below the status bar.
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (!state.isLoading && state.totalCount > 0) {
                 // Squircle shape is SHARED across both themes (same geometry
@@ -489,6 +582,14 @@ fun HomeScreen(
     }
 }
 
+private fun formatBackupSize(bytes: Long): String {
+    if (bytes <= 0L) return "0 KB"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return "${kotlin.math.max(1, kb.toInt())} KB"
+    val mb = kb / 1024.0
+    return String.format(java.util.Locale.US, "%.1f MB", mb)
+}
+
 @Composable
 private fun ReminderWarningBanner(
     onEnable: () -> Unit,
@@ -529,24 +630,24 @@ private fun HomeOnboardingDialog(
     val steps = listOf(
         OnboardingStep(
             icon = Icons.Rounded.Share,
-            title = "Save from any app",
-            body = "Tap Share in YouTube, Instagram, Chrome, Photos, or Files, then choose PettiBox.",
+            title = "Keep things for later",
+            body = "Save links, images, PDFs, notes, and reminders into one searchable PettiBox.",
             tip = null
         ),
         OnboardingStep(
             icon = Icons.Rounded.GridView,
-            title = "Pick a collection",
-            body = "Choose a collection while saving so links, screenshots, PDFs, and notes stay organized.",
+            title = "Share into PettiBox",
+            body = "Tap Share in another app, choose PettiBox, then save it to a shelf. You can add notes, tags, or reminders when they help.",
             tip = null
         ),
         OnboardingStep(
             icon = Icons.Rounded.Search,
-            title = "Find it later",
-            body = "Search titles, notes, tags, links, and text extracted from images or PDFs.",
+            title = "Find it fast",
+            body = "Search by words, source app, file type, tag, reminder, or text inside images and PDFs.",
             // One-line discovery hint for the single most-leveraged
             // interaction in the app. Long-press is invisible without
             // it being said somewhere.
-            tip = "Tip: long-press any save for pin, archive, remind, or move."
+            tip = "Tip: Archive is your safety net. Delete only when you're sure."
         )
     )
     val current = steps[page]
@@ -593,7 +694,7 @@ private fun HomeOnboardingDialog(
                     if (page < steps.lastIndex) page++ else onAdd()
                 }
             ) {
-                Text(if (page < steps.lastIndex) "Next" else "Add first save")
+                Text(if (page < steps.lastIndex) "Next" else "Try a quick note")
             }
         },
         dismissButton = {
@@ -681,27 +782,27 @@ private fun FirstRunGuide(
             .padding(16.dp)
     ) {
         Text(
-            "Save from any app",
+            "Your shelf starts with one save",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
             color = scheme.onSurface
         )
         Spacer(Modifier.height(12.dp))
         GuideStep(
             icon = Icons.Rounded.Share,
-            title = "Tap Share",
-            body = "When something is worth keeping, tap Share in the app you're using."
+            title = "Use Share",
+            body = "From Chrome, YouTube, Photos, Files, or another app, tap Share and choose PettiBox."
         )
         Spacer(Modifier.height(10.dp))
         GuideStep(
             icon = Icons.Rounded.GridView,
-            title = "Choose PettiBox",
-            body = "Pick a collection, add any note or reminder, then tap Save."
+            title = "Pick a collection",
+            body = "Choose where it belongs. You can add a note, tag, or reminder later."
         )
         Spacer(Modifier.height(10.dp))
         GuideStep(
             icon = Icons.Rounded.Search,
             title = "Find it later",
-            body = "Search links, notes, files, screenshots, PDFs, and text inside images."
+            body = "Search by words, source, type, tag, reminder, or text inside images and PDFs."
         )
         Spacer(Modifier.height(14.dp))
         Row(

@@ -34,6 +34,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ghostgramlabs.pettibox.ui.theme.PaperBright
@@ -236,6 +241,11 @@ private fun BottomNavItem(
         modifier = Modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(14.dp))
+            .semantics {
+                role = Role.Tab
+                this.selected = selected
+                stateDescription = if (selected) "Selected" else "Not selected"
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {

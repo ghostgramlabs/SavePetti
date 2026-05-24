@@ -276,6 +276,12 @@ fun ReminderPickerSheet(
                 "Remind me",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "PettiBox will ask for notification permission when needed. If exact alarms are off, reminders may arrive a little later.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             if (currentRemindAt != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(

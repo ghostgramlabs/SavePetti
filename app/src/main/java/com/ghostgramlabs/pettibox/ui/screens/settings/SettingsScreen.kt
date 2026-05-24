@@ -277,7 +277,7 @@ fun SettingsScreen(
         ) {
             ScreenHeading(
                 title = "Make it yours",
-                subtitle = "Appearance, collections, scans, and backups — your shelf, your rules."
+                subtitle = "Your shelf settings, safety copies, and quick help."
             )
 
             Spacer(Modifier.height(8.dp))
@@ -288,6 +288,8 @@ fun SettingsScreen(
                 WorkInProgressBanner(label = busyLabel!!)
                 Spacer(Modifier.height(12.dp))
             }
+            BackupConfidenceBanner(localBackupStatus)
+            Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Appearance") {
                 ThemeChoice(
                     mode = ThemeMode.SYSTEM,
@@ -504,7 +506,7 @@ fun SettingsScreen(
                 HelpGroupTitle("The basics")
                 HelpItem(
                     title = "Save from any app",
-                    body = "In YouTube, Instagram, Chrome, Photos, Files, or another app, tap Share and choose PettiBox. Pick a collection, then save.",
+                    body = "Tap Share in another app, choose PettiBox, pick a collection, then save. Add a note or reminder only when you need it.",
                     icon = Icons.Rounded.Share
                 )
                 HelpItem(
@@ -514,12 +516,12 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Find it later",
-                    body = "Search looks through titles, notes, tags, sources, links, and text found inside images or PDFs. Text recognition is most reliable for English.",
+                    body = "Search by words, source app, file type, tag, collection, or upcoming reminders. It also checks English text found inside images and PDFs.",
                     icon = Icons.Rounded.Search
                 )
                 HelpItem(
                     title = "Make a new collection",
-                    body = "Settings → Create a collection. Pick a name, emoji, and color — it shows up in Browse and in the share sheet.",
+                    body = "Use Collections above to create or rename shelves. New collections show up in Browse and in the save sheet.",
                     icon = Icons.Rounded.GridView
                 )
 
@@ -527,7 +529,7 @@ fun SettingsScreen(
                 HelpGroupTitle("Get more out of it")
                 HelpItem(
                     title = "Long-press for quick actions",
-                    body = "Press and hold any save to pin, favorite, archive, snooze a reminder, move it to a collection, or delete — without opening it.",
+                    body = "Press and hold any save to pin, favorite, archive, set a reminder, move it, copy a link, or delete it.",
                     icon = Icons.Rounded.TouchApp
                 )
                 HelpItem(
@@ -542,12 +544,12 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Archive when you're done",
-                    body = "Archived saves disappear from Home but stay searchable. Browse → Archive shows every archived save across all collections — even ones with no collection.",
+                    body = "Archived saves disappear from Home but stay searchable. Use Archive instead of Delete when you may need something again.",
                     icon = Icons.Rounded.Archive
                 )
                 HelpItem(
                     title = "Remind me later",
-                    body = "Tap the clock on any save (or in the share sheet) to schedule a reminder. Pick Tonight, Tomorrow, Weekend, Next week, or a custom date and time. Set what time the morning and evening presets fire under Reminders. Reminders fire on the dot and survive a phone restart.",
+                    body = "Tap the clock on any save or in the save sheet. Quick reminders use your Morning and Evening times above; Custom lets you pick the exact date and time.",
                     icon = Icons.Rounded.AccessTime
                 )
                 HelpItem(
@@ -565,7 +567,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "Export creates a ZIP with backup.json and local attachment files. Nightly local backup keeps the 3 most recent ZIPs on this device, and can also copy each one to a folder you choose.",
+                    body = "Automatic safety copy keeps recent backups on this device. Export creates a ZIP file you can put in Drive, email to yourself, or move to another phone.",
                     icon = Icons.Rounded.Download
                 )
                 }
@@ -574,7 +576,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Backup") {
                 Text(
-                    "Export a ZIP backup with your saves, collections, tags, and local attachment files.",
+                    "Keep a safety copy of your shelf. Automatic backup protects this device; export creates a file you can save or share elsewhere.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -592,15 +594,15 @@ fun SettingsScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Automatic local backup",
+                            "Automatic safety copy",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             if (localBackupStatus.lastBackupAt > 0L) {
-                                "Nightly at about 2 AM. Last backup: ${formatBackupTime(localBackupStatus.lastBackupAt)}."
+                                "Runs overnight. Last copy: ${formatBackupTime(localBackupStatus.lastBackupAt)}."
                             } else {
-                                "Nightly at about 2 AM. Stored on this device only."
+                                "Runs overnight and keeps recent copies on this device."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -612,8 +614,8 @@ fun SettingsScreen(
                             scope.launch {
                                 viewModel.setAutoLocalBackup(enabled)
                                 snackbarHostState.showSnackbar(
-                                    if (enabled) "Nightly local backup is on"
-                                    else "Nightly local backup is off"
+                                    if (enabled) "Automatic safety copy is on"
+                                    else "Automatic safety copy is off"
                                 )
                             }
                         }
@@ -622,9 +624,9 @@ fun SettingsScreen(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     if (localBackupStatus.folderUri.isBlank()) {
-                        "By default, the 3 most recent automatic backups stay in PettiBox app storage. Pick a folder to keep a copy somewhere easier to find."
+                        "PettiBox keeps the 3 newest safety copies privately. On a fresh install, PettiBox only checks this backup folder automatically. Choose a folder if you also want an easy-to-find copy in Files or cloud storage."
                     } else {
-                        "Automatic backups are copied to your selected folder. PettiBox also keeps the 3 most recent backups as a private safety copy on this device."
+                        "PettiBox keeps a private safety copy and also copies backups to the folder you chose."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -641,9 +643,14 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Default backup folder (full path)",
+                    "Private safety-copy location",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Mostly for troubleshooting. You do not need to remember this path.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
                 SelectionContainer {
@@ -707,7 +714,7 @@ fun SettingsScreen(
                                     )
                                 }
                                 .onFailure {
-                                    snackbarHostState.showSnackbar("Couldn't create local backup")
+                                    snackbarHostState.showSnackbar("Couldn't make safety copy")
                                 }
                             busyLabel = null
                         }
@@ -717,7 +724,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Back up now on this device", fontWeight = FontWeight.Bold)
+                    Text("Make safety copy now", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
@@ -745,7 +752,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Export backup file", fontWeight = FontWeight.Bold)
+                    Text("Export a backup file", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
@@ -755,8 +762,14 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Import backup", fontWeight = FontWeight.Bold)
+                    Text("Restore from backup", fontWeight = FontWeight.Bold)
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Use this if your backup file is outside PettiBox's backup folder.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             // Outer NavGraph Scaffold already pads for the bottom nav, and
             // this screen's Scaffold uses WindowInsets(0) to avoid double
@@ -816,6 +829,47 @@ private fun WorkInProgressBanner(label: String) {
 }
 
 @Composable
+private fun BackupConfidenceBanner(status: LocalBackupStatus) {
+    val hasBackup = status.lastBackupAt > 0L
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Icon(
+            Icons.Rounded.Download,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (hasBackup) "Last backup: ${formatBackupTime(status.lastBackupAt)}"
+                else if (status.enabled) "Safety copy is on"
+                else "Safety copy is off",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                when {
+                    status.lastCopyFailedAt > 0L -> "PettiBox made a private copy, but the extra folder copy needs attention."
+                    hasBackup && status.folderUri.isNotBlank() -> "Also copied to the folder you chose."
+                    hasBackup -> "Stored privately on this device."
+                    status.enabled -> "PettiBox will make a copy overnight."
+                    else -> "Turn on automatic safety copy below."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun NoticeBanner(
     text: String,
     action: String,
@@ -865,10 +919,10 @@ private fun HelpFlow() {
             color = MaterialTheme.colorScheme.primary
         )
         Spacer(Modifier.height(8.dp))
-        HelpStep(number = "1", title = "Tap Share", body = "Use the Share button in the app where you found something.")
-        HelpStep(number = "2", title = "Choose PettiBox", body = "PettiBox appears in Android's share menu for links, text, images, PDFs, and files.")
-        HelpStep(number = "3", title = "Pick a collection", body = "Tap a collection chip, add any note or reminder, then save.")
-        HelpStep(number = "4", title = "Search later", body = "Find it by title, note, tag, source, link, or English text inside images and PDFs.")
+        HelpStep(number = "1", title = "Save", body = "Tap Share in any app and choose PettiBox, or use + on Home.")
+        HelpStep(number = "2", title = "Organize", body = "Pick a collection. Add notes, tags, or reminders only when useful.")
+        HelpStep(number = "3", title = "Find", body = "Search by words, source, type, tag, collection, reminder, or text inside images/PDFs.")
+        HelpStep(number = "4", title = "Protect", body = "Archive instead of deleting, and keep automatic safety copy on.")
     }
 }
 

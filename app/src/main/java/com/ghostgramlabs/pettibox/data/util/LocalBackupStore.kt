@@ -34,6 +34,16 @@ class LocalBackupStore @Inject constructor(
             .forEach { it.delete() }
     }
 
+    fun latestBackupFile(): File? =
+        backupDir()
+            .listFiles { file ->
+                file.isFile &&
+                    file.extension.equals("zip", ignoreCase = true) &&
+                    file.name.startsWith("pettibox-")
+            }
+            .orEmpty()
+            .maxByOrNull { it.lastModified() }
+
     fun backupLocationLabel(): String = "Device storage / PettiBox backups"
 
     fun backupPath(): String = backupDir().absolutePath

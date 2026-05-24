@@ -148,17 +148,38 @@ fun DetailScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete this save?") },
-            text = { Text("It's gone for good — there's no archive to recover from. Archive instead if you might want it back.") },
+            text = { Text("PettiBox moves it to Archive first and gives you Undo. Archive instead if you want to keep it searchable.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     scope.launch {
-                        viewModel.delete().invokeOnCompletion { onDeleted() }
+                        val stagedItem = viewModel.stageDelete() ?: return@launch
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Moved to Archive",
+                            actionLabel = "Undo"
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.undoStagedDelete(stagedItem)
+                        } else {
+                            viewModel.deletePermanently(stagedItem)
+                            onDeleted()
+                        }
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                Row {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                    if (state.item?.isArchived != true) {
+                        TextButton(onClick = {
+                            showDeleteConfirm = false
+                            viewModel.setArchived(true)
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Tucked away in Archive")
+                            }
+                        }) { Text("Archive instead") }
+                    }
+                }
             },
             shape = RoundedCornerShape(24.dp)
         )

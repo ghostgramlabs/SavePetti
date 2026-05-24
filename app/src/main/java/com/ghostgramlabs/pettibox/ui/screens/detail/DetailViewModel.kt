@@ -75,6 +75,26 @@ class DetailViewModel @Inject constructor(
         ReminderScheduler.cancel(appContext, it.id)
         repo.delete(it.id)
     }
+    suspend fun stageDelete(): SaveItemEntity? {
+        val it = state.value.item ?: return null
+        repo.setArchived(it.id, true)
+        if (it.remindAt != null) {
+            repo.setRemindAt(it.id, null)
+            ReminderScheduler.cancel(appContext, it.id)
+        }
+        return it
+    }
+    suspend fun undoStagedDelete(item: SaveItemEntity) {
+        repo.setArchived(item.id, item.isArchived)
+        if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
+            repo.setRemindAt(item.id, item.remindAt)
+            ReminderScheduler.schedule(appContext, item.id, item.remindAt)
+        }
+    }
+    suspend fun deletePermanently(item: SaveItemEntity) {
+        ReminderScheduler.cancel(appContext, item.id)
+        repo.delete(item.id)
+    }
     fun setArchived(archived: Boolean) = viewModelScope.launch {
         val it = state.value.item ?: return@launch
         repo.setArchived(it.id, archived)
