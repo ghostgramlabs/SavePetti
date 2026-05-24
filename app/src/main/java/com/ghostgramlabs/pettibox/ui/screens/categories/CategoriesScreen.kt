@@ -101,6 +101,7 @@ fun CategoriesScreen(
     var showDeleteCategory by remember { mutableStateOf(false) }
     var showEditCategory by remember { mutableStateOf(false) }
     var selectedItems by remember(destination) { mutableStateOf<Set<Long>>(emptySet()) }
+    var selectionMode by remember(destination) { mutableStateOf(false) }
     // O(1) lookup for items rendered in special destinations where we
     // don't have a hand-picked accent color (Favorites, Archive, Tag drill).
     val categoriesById = remember(state.categories) {
@@ -231,16 +232,23 @@ fun CategoriesScreen(
                     sort = state.sort,
                     onSort = viewModel::setSort,
                     selectedIds = selectedItems,
+                    selectionMode = selectionMode,
+                    onStartSelection = { selectionMode = true },
                     onToggleSelect = { item ->
                         selectedItems = if (item.id in selectedItems) selectedItems - item.id else selectedItems + item.id
                     },
-                    onClearSelection = { selectedItems = emptySet() },
+                    onClearSelection = {
+                        selectedItems = emptySet()
+                        selectionMode = false
+                    },
                     onArchiveSelected = { items ->
                         viewModel.archiveItems(items)
                         selectedItems = emptySet()
+                        selectionMode = false
                     },
                     onDeleteSelected = { items ->
                         selectedItems = emptySet()
+                        selectionMode = false
                         scope.launch {
                             viewModel.stageDeleteItems(items)
                             val result = snackbarHostState.showSnackbar(
@@ -582,6 +590,8 @@ private fun DrillView(
     sort: BrowseSort,
     onSort: (BrowseSort) -> Unit,
     selectedIds: Set<Long>,
+    selectionMode: Boolean,
+    onStartSelection: () -> Unit,
     onToggleSelect: (SaveItemEntity) -> Unit,
     onClearSelection: () -> Unit,
     onArchiveSelected: (List<SaveItemEntity>) -> Unit,
@@ -725,14 +735,23 @@ private fun DrillView(
         item(span = StaggeredGridItemSpan.FullLine) {
             Column {
                 SortStrip(selected = sort, onSelect = onSort)
-                if (selectedIds.isNotEmpty()) {
+                if (selectionMode) {
                     Spacer(Modifier.height(8.dp))
-                    BulkActionBar(
-                        count = selectedIds.size,
-                        onClear = onClearSelection,
-                        onArchive = { onArchiveSelected(selectedVisibleItems) },
-                        onDelete = { showBulkDeleteConfirm = true }
-                    )
+                    if (selectedIds.isEmpty()) {
+                        SelectionHintBar(onClear = onClearSelection)
+                    } else {
+                        BulkActionBar(
+                            count = selectedIds.size,
+                            onClear = onClearSelection,
+                            onArchive = { onArchiveSelected(selectedVisibleItems) },
+                            onDelete = { showBulkDeleteConfirm = true }
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = onStartSelection) {
+                        Text("Select")
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -756,11 +775,9 @@ private fun DrillView(
                     categoryEmoji = perItemCategory?.emoji,
                     categoryName = perItemCategory?.name,
                     onClick = {
-                        if (selectedIds.isNotEmpty()) onToggleSelect(item) else onOpenItem(item.id)
+                        if (selectionMode) onToggleSelect(item) else onOpenItem(item.id)
                     },
-                    onLongClick = {
-                        if (selectedIds.isNotEmpty()) onToggleSelect(item) else onToggleSelect(item)
-                    }
+                    onLongClick = if (selectionMode) null else ({ onLongPressItem(item) })
                 )
                 if (item.id in selectedIds) {
                     Icon(
@@ -820,6 +837,28 @@ private val BrowseSort.identityAccent: Color
         BrowseSort.UPDATED -> Color(0xFF6E7FB8)
         BrowseSort.REMINDER -> Color(0xFF2F9B8F)
     }
+
+@Composable
+private fun SelectionHintBar(onClear: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(scheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onClear, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Rounded.Close, contentDescription = "Exit selection")
+        }
+        Text(
+            "Tap saves to select",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = scheme.primary
+        )
+    }
+}
 
 @Composable
 private fun BulkActionBar(
