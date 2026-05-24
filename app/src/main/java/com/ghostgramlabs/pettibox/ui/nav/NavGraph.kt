@@ -30,9 +30,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ghostgramlabs.pettibox.ui.theme.PaperBright
+import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -180,12 +185,29 @@ fun PettiBoxNavGraph(
 @Composable
 private fun BottomNav(nav: NavHostController, currentRoute: String) {
     val scheme = MaterialTheme.colorScheme
+    // A "dock" the tabs rest on rather than a detached system bar. The shape is
+    // SHARED geometry — both themes get the gently-rounded top + top hairline,
+    // so light and dark stay consistent. Only the paint differs per mode: a
+    // cream tier with a soft lift in light, the flat dark `surface` in dark.
+    val light = isLightTheme()
+    val dockShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    val hairline = scheme.outline
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly,
         modifier = Modifier
             .fillMaxWidth()
-            .background(scheme.surface)
+            .then(if (light) Modifier.shadow(8.dp, dockShape, clip = false) else Modifier)
+            .clip(dockShape)
+            .background(if (light) PaperBright else scheme.surface)
+            .drawBehind {
+                drawLine(
+                    color = hairline,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
             .navigationBarsPadding()
             .height(60.dp)
     ) {

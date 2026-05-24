@@ -1,5 +1,6 @@
 package com.ghostgramlabs.pettibox.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,9 +22,11 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoveDown
 import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.AlertDialog
@@ -44,6 +47,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
@@ -71,6 +77,8 @@ fun QuickActionSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val clipboard = LocalClipboardManager.current
+    val ctx = LocalContext.current
     var showMove by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -133,6 +141,30 @@ fun QuickActionSheet(
                 title = if (item.isArchived) "Unarchive" else "Archive",
                 onClick = { onToggleArchive(); onDismiss() }
             )
+            // Copy actions — grab the link or the note text without opening
+            // the save. Shown only when there's something to copy.
+            if (!item.url.isNullOrBlank()) {
+                ActionRow(
+                    icon = Icons.Rounded.Link,
+                    title = "Copy link",
+                    onClick = {
+                        clipboard.setText(AnnotatedString(item.url.orEmpty()))
+                        Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                )
+            }
+            if (!item.notes.isNullOrBlank()) {
+                ActionRow(
+                    icon = Icons.Rounded.ContentCopy,
+                    title = "Copy note",
+                    onClick = {
+                        clipboard.setText(AnnotatedString(item.notes.orEmpty()))
+                        Toast.makeText(ctx, "Note copied", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                )
+            }
             ActionRow(
                 icon = Icons.Rounded.MoveDown,
                 title = "Move to collection",

@@ -11,19 +11,23 @@ import androidx.compose.ui.graphics.Color
 // the now-stock indie-app combo of Airbnb-coral-on-cream + Tailwind-500
 // jewel tones, which read as "Figma kit" the moment you see them.
 
-// ── Paper base ────────────────────────────────────────────────────────────
-// Background-to-surface contrast was previously too tight (only 8 luminance
-// units apart), so cards on Bone read as "one beige sheet." Bumped PaperOff
-// brighter and pushed PaperEdge darker so cards visibly lift off the page
-// and hairline borders are actually visible against the paper texture.
-val Bone = Color(0xFFF0EBE2)        // background — warm off-white, not pure
-val PaperOff = Color(0xFFFBF8F2)    // surface — meaningfully brighter than Bone
-val PaperEdge = Color(0xFFD6CCBA)   // outline / hairlines — visible on Bone now
+// ── Paper base (light) ─────────────────────────────────────────────────────
+// A three-tier warm surface ladder rather than a flat sheet. Surfaces separate
+// by LUMINANCE (deeper paper bg → soft-ivory card → brightest cream for docks)
+// with the light-mode card shadow doing the lifting — but the borders are kept
+// a warm, PRESENT pencil-edge, not a faint wash: defined enough to read as
+// hand-cut paper, never a cold wireframe. The bg also lets the PaperTexture
+// grain show through (see MainActivity) so it reads as real paper, not vector
+// color — that grain is what stops the daytime palette feeling machine-made.
+val Bone = Color(0xFFF1E9DC)        // background — warm oatmeal paper, sits a touch deeper so cards lift
+val PaperOff = Color(0xFFFBF6EE)    // primary surface / cards — soft ivory
+val PaperBright = Color(0xFFFFFDF8) // elevated cream — bottom-nav dock, dialogs, brightest tier
+val PaperEdge = Color(0xFFD9C9B1)   // outline / hairlines — a warm, present pencil-edge (defined, not cold)
 
 // ── Ink ───────────────────────────────────────────────────────────────────
-val Soot = Color(0xFF1F1D1A)        // primary text — warm near-black
-val Gravel = Color(0xFF6B6660)      // secondary text — soft warm gray
-val Pebble = Color(0xFF9A938A)      // tertiary / placeholder
+val Soot = Color(0xFF2A231D)        // primary text — warm charcoal, softer than the old near-black
+val Gravel = Color(0xFF5C5046)      // secondary text — deep warm brown, legible not washed
+val Pebble = Color(0xFF9A938A)      // tertiary / placeholder (also dark-mode secondary text — leave as-is)
 
 // ── Accent ────────────────────────────────────────────────────────────────
 // Single warm accent. Persimmon = a real pigment name; sits between rust and
@@ -62,7 +66,7 @@ val CoralDeep = PersimmonDeep
 val Peach = PersimmonWash
 val Butter = Color(0xFFE8DCC2)      // muted dijon for secondary container
 val Surface = PaperOff
-val SurfaceTint = Color(0xFFEFE6D6) // subtle tonal lift
+val SurfaceTint = Color(0xFFECE3D4) // recessed warm tonal — inset fills (search) & soft dividers
 val Outline = PaperEdge
 
 val RecipeOrange = Apricot

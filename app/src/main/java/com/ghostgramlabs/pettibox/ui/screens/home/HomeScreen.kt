@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -49,8 +50,10 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -68,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +94,7 @@ import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
 import com.ghostgramlabs.pettibox.ui.components.SectionHeader
 import com.ghostgramlabs.pettibox.ui.screens.save.IncomingShare
 import com.ghostgramlabs.pettibox.ui.screens.save.SaveSheet
+import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
 
 @Composable
 fun HomeScreen(
@@ -201,7 +206,7 @@ fun HomeScreen(
     }
 
     if (showLinkDialog) {
-        AddLinkDialog(
+        AddLinkSheet(
             initial = clipboardUrl(ctx).orEmpty(),
             onDismiss = { showLinkDialog = false },
             onConfirm = { url ->
@@ -271,11 +276,20 @@ fun HomeScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         floatingActionButton = {
             if (!state.isLoading && state.totalCount > 0) {
+                // Squircle shape is SHARED across both themes (same geometry
+                // rule as the nav dock) so they match. Only the lift differs as
+                // per-mode treatment: a flat 3 dp paper-cut in light, the
+                // floatier default 6 dp in dark. Persimmon identity kept.
+                val light = isLightTheme()
                 FloatingActionButton(
                     onClick = { showChooser = true },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = if (light) 3.dp else 6.dp,
+                        pressedElevation = if (light) 6.dp else 12.dp
+                    )
                 ) { Icon(Icons.Rounded.Add, contentDescription = "Add to shelf") }
             }
         }
@@ -365,7 +379,7 @@ fun HomeScreen(
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(24.dp))
                     if (state.categories.isNotEmpty()) {
                         // No "See all" trailing — Browse is one tap away in
                         // the bottom nav already; the link was duplicate
@@ -374,14 +388,14 @@ fun HomeScreen(
                             "Browse",
                             subtitle = "Tap a vibe to explore"
                         )
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
                         if (state.categories.size > 8) {
                             HomeCollectionFinder(
                                 query = collectionQuery,
                                 onQueryChange = { collectionQuery = it },
                                 modifier = Modifier.padding(horizontal = 20.dp)
                             )
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(12.dp))
                         }
                         CategoryStrip(
                             categories = visibleBrowseCategories,
@@ -395,20 +409,20 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                             )
                         }
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(24.dp))
                     }
                     if (state.sources.isNotEmpty()) {
                         SectionHeader("From", subtitle = "Where you saved it from")
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
                         SourceStrip(
                             sources = state.sources,
                             onClick = onOpenSource
                         )
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(24.dp))
                     }
                     if (state.pinned.isNotEmpty()) {
                         SectionHeader("Pinned", subtitle = "Stuff you didn't want to lose")
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
                         // Pinned items render as a leaning "shelf" instead of
                         // joining the staggered grid: alternating tilt, varying
                         // widths, and a hand-drawn shelf line beneath. Reads
@@ -419,7 +433,7 @@ fun HomeScreen(
                             onOpenItem = onOpenItem,
                             onLongPress = { quickActionItem = it }
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(16.dp))
                     }
                     // Favorites get a quieter horizontal row — distinct from
                     // the leaning Pinned shelf so the two read as different
@@ -427,14 +441,14 @@ fun HomeScreen(
                     // you've signaled you love long-term). Hidden when empty.
                     if (state.favorites.isNotEmpty()) {
                         SectionHeader("Loved", subtitle = "Things you marked with a heart")
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
                         FavoritesRow(
                             items = state.favorites,
                             categoriesById = categoriesById,
                             onOpenItem = onOpenItem,
                             onLongPress = { quickActionItem = it }
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
             }
@@ -442,12 +456,12 @@ fun HomeScreen(
             if (state.recent.isNotEmpty()) {
                 item(span = StaggeredGridItemSpan.FullLine) {
                     Column {
-                        Spacer(Modifier.height(20.dp))
+                        Spacer(Modifier.height(24.dp))
                         SectionHeader(
                             "Recent saves",
                             subtitle = "Fresh from the share sheet"
                         )
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
             }
@@ -757,38 +771,57 @@ private fun SourceStrip(
     sources: List<SourceCount>,
     onClick: (String) -> Unit
 ) {
+    // A tidy row of equal-width "source cards" — a soft-edged tile with a
+    // squircle emoji token, the app name, and its count. Fixed width + a
+    // whisper of a border makes them read as one curated set on a shelf
+    // rather than loose icons floating on the page.
+    val scheme = MaterialTheme.colorScheme
+    val light = isLightTheme()
+    val tileShape = RoundedCornerShape(16.dp)
     LazyRow(
         contentPadding = PaddingValues(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(sources, key = { it.source }) { s ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .width(86.dp)
+                    .then(
+                        if (light) Modifier
+                            .shadow(2.dp, tileShape, clip = false)
+                            .clip(tileShape)
+                            .background(scheme.surface)
+                            .border(1.dp, scheme.outline.copy(alpha = 0.6f), tileShape)
+                        else Modifier
+                            .clip(tileShape)
+                            .background(scheme.surface)
+                    )
                     .clickable { onClick(s.source) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .padding(horizontal = 8.dp, vertical = 12.dp)
             ) {
                 Box(
                     Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(scheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(s.emoji, style = MaterialTheme.typography.titleMedium)
                 }
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     s.display,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = scheme.onSurface,
+                    maxLines = 1
                 )
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    "${s.count}",
+                    "${s.count} saved",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1
                 )
             }
         }
@@ -999,7 +1032,11 @@ private fun AddChooserSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        // Was Color.Transparent, which left the title + rows floating on the
+        // dimmed app with no panel behind them. A solid paper panel (matching
+        // the other sheets) makes it read as one cohesive popup; the rows use
+        // the brighter `surface` so they still lift off it.
+        containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
         Column(
@@ -1094,8 +1131,9 @@ private fun ChooserRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddLinkDialog(
+private fun AddLinkSheet(
     initial: String,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
@@ -1104,40 +1142,64 @@ private fun AddLinkDialog(
     val trimmed = text.trim()
     val isValid = trimmed.startsWith("http://", ignoreCase = true) ||
         trimmed.startsWith("https://", ignoreCase = true)
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Save a link") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    placeholder = { Text("https://...") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                "Save a link",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Paste a URL — we'll fetch the title.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("https://...") },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (initial.isNotBlank() && initial == text) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Pulled from your clipboard.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (initial.isNotBlank() && initial == text) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Pulled from your clipboard.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(trimmed) },
-                enabled = isValid
-            ) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-        shape = RoundedCornerShape(24.dp)
-    )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = isValid,
+                    onClick = { onConfirm(trimmed) },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Save", fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
 }
 
 private fun clipboardUrl(ctx: Context): String? {

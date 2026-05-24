@@ -561,9 +561,9 @@ private fun FinderPickerBody(
             }
         }
 
-        // Pinned bottom: secondary actions + optional details, hidden while
-        // searching so the list keeps the whole sheet. The footer is always
-        // visible so Save is one tap away no matter what.
+        // Pinned bottom: secondary actions + optional details. Search still
+        // gets most of the sheet, but the edit/reminder affordances stay
+        // reachable so the user never has to back out of typing to finish.
         if (!searching) {
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Spacer(Modifier.height(10.dp))
@@ -589,7 +589,7 @@ private fun FinderPickerBody(
                 )
                 Spacer(Modifier.height(12.dp))
             }
-        } else if (state.selectedCategory != null) {
+        } else {
             Column(Modifier.padding(horizontal = 20.dp)) {
                 SearchSelectionActions(
                     selectedCategoryName = selectedCategoryName,
@@ -730,8 +730,10 @@ private fun SearchSelectionActions(
         contentPadding = PaddingValues(end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item {
-            SelectedCollectionPill(selectedCategoryName ?: "collection")
+        if (selectedCategoryName != null) {
+            item {
+                SelectedCollectionPill(selectedCategoryName)
+            }
         }
         item {
             RemindMeChip(remindAt = remindAt, onClick = onPickReminder)

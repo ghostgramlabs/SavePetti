@@ -31,6 +31,16 @@ val PettiBoxTypography = Typography(
         fontFamily = Display, fontWeight = FontWeight.Bold,
         fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.2).sp
     ),
+    // Material's AlertDialog renders its title in headlineSmall. We never
+    // defined it, so dialog titles were falling back to stock Roboto — which
+    // is what made every centred popup ("Save a link", "New collection", …)
+    // read as a generic Android dialog instead of PettiBox. Defining it as a
+    // serif headline gives every dialog the same editorial voice as the
+    // screens, in both themes, from one place.
+    headlineSmall = TextStyle(
+        fontFamily = Display, fontWeight = FontWeight.ExtraBold,
+        fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.2).sp
+    ),
     titleLarge = TextStyle(
         fontFamily = Display, fontWeight = FontWeight.Bold,
         fontSize = 18.sp, lineHeight = 24.sp

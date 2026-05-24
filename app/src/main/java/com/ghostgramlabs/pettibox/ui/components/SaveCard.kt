@@ -124,7 +124,7 @@ private fun Modifier.cardClickable(
 @Composable
 private fun Modifier.lightCardShadow(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
-    return if (isLight) this.shadow(2.dp, shape, clip = false) else this
+    return if (isLight) this.shadow(3.dp, shape, clip = false) else this
 }
 
 // ── Variants ──────────────────────────────────────────────────────────────

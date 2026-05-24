@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
 
 /**
  * A category chip with a slight tilt so a row of chips looks
@@ -40,16 +41,24 @@ fun CategoryChip(
     suggested: Boolean = false,
     onClick: () -> Unit
 ) {
-    val bg = if (selected) color else color.copy(alpha = 0.14f)
+    // Light mode leans into a soft filled pastel tile with only a whisper of
+    // an edge, so a row reads as collectible tiles rather than outlined
+    // buttons. Dark mode keeps its original tint + visible hairline.
+    val light = isLightTheme()
+    val bg = if (selected) color else color.copy(alpha = if (light) 0.24f else 0.14f)
     val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
     val borderWidth = when {
         selected -> 0.dp
         suggested -> 2.dp
         else -> 1.dp
     }
+    // Light: a filled pastel tile with a gentle but real colored edge so it
+    // reads as a tactile, collectible thing rather than a faint smudge — soft,
+    // not the old hard 0.35 outline, but present enough to have a shape.
     val borderColor = when {
         selected -> Color.Transparent
         suggested -> MaterialTheme.colorScheme.primary
+        light -> color.copy(alpha = 0.30f)
         else -> color.copy(alpha = 0.35f)
     }
     Row(

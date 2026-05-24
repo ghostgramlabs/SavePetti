@@ -48,7 +48,15 @@ class MainActivity : ComponentActivity() {
             PettiBoxTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    // Transparent so the app-wide paper texture PettiBoxTheme
+                    // paints behind everything actually shows through (cards and
+                    // sheets draw their own opaque surfaces on top). Painting the
+                    // background color here was covering the grain, leaving the
+                    // paper reading as flat vector color — the exact "AI tell"
+                    // the texture exists to kill. contentColor keeps default text
+                    // on-palette since the Surface no longer supplies a bg color.
+                    color = androidx.compose.ui.graphics.Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onBackground
                 ) {
                     PettiBoxNavGraph(
                         themeMode = themeMode,

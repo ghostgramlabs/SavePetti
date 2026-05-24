@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
 
 @Composable
 fun SearchField(
@@ -34,14 +35,23 @@ fun SearchField(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Light mode: a recessed warm well (surfaceVariant sits a touch deeper than
+    // the page) with a soft hairline — reads like a slot pressed into the
+    // paper rather than an outlined Material field. Dark keeps its raised look.
+    val light = isLightTheme()
+    val shape = RoundedCornerShape(16.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(scheme.surface)
-            .border(1.5.dp, scheme.outline, RoundedCornerShape(14.dp))
+            .clip(shape)
+            .background(if (light) scheme.surfaceVariant else scheme.surface)
+            .border(
+                width = if (light) 1.dp else 1.5.dp,
+                color = if (light) scheme.outline.copy(alpha = 0.6f) else scheme.outline,
+                shape = shape
+            )
             .padding(horizontal = 18.dp)
     ) {
         Icon(Icons.Rounded.Search, null, tint = scheme.primary)

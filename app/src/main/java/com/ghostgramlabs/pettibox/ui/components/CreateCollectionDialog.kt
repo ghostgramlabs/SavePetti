@@ -7,22 +7,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +52,11 @@ import com.ghostgramlabs.pettibox.ui.theme.StyleAmber
 import com.ghostgramlabs.pettibox.ui.theme.TravelTeal
 
 val CollectionEmojiSeeds = listOf(
-    "\uD83D\uDCE6", "\uD83D\uDED2", "\uD83C\uDF73", "\u2708\uFE0F", "\uD83D\uDCAA",
-    "\uD83D\uDC57", "\uD83C\uDFE1", "\uD83D\uDC84", "\uD83D\uDCD6", "\uD83D\uDCB0",
-    "\uD83C\uDFB5", "\uD83D\uDCA1", "\uD83C\uDFAC", "\uD83D\uDCBC", "\u2764\uFE0F",
-    "\uD83D\uDCDA", "\u2B50", "\uD83C\uDFA8", "\uD83D\uDC3E", "\uD83C\uDF31",
-    "\uD83E\uDDE0", "\u2615", "\uD83D\uDCF7", "\uD83C\uDFAE", "\uD83E\uDDD8"
+    "📦", "🛒", "🍳", "✈️", "💪",
+    "👗", "🏡", "💄", "📖", "💰",
+    "🎵", "💡", "🎬", "💼", "❤️",
+    "📚", "⭐", "🎨", "🐾", "🌱",
+    "🧠", "☕", "📷", "🎮", "🧘"
 )
 
 val CollectionColorSeeds = listOf(
@@ -59,6 +66,13 @@ val CollectionColorSeeds = listOf(
 
 data class NewCollection(val name: String, val emoji: String, val colorHex: Long)
 
+/**
+ * Create-a-collection popup. A bottom sheet (not a centred dialog) so it
+ * matches the rest of the app's popups — the Add chooser, reminder picker,
+ * quick actions — and the "tap Add → name it" flow stays in one consistent
+ * surface that slides up from the bottom.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateCollectionDialog(
     initialName: String = "",
@@ -68,104 +82,116 @@ fun CreateCollectionDialog(
     var name by remember(initialName) { mutableStateOf(initialName.take(28)) }
     var emoji by remember { mutableStateOf(CollectionEmojiSeeds.first()) }
     var color by remember { mutableStateOf(CollectionColorSeeds.first()) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(24.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = {
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 20.dp)
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+        ) {
             Text(
                 "New collection",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onBackground
             )
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it.take(28) },
-                    placeholder = { Text("Name it (e.g. Weekend reads)") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("Pick an emoji", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(CollectionEmojiSeeds) { e ->
-                        val selected = e == emoji
-                        Box(
-                            Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selected) color.copy(alpha = 0.18f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                .border(
-                                    width = if (selected) 2.dp else 0.dp,
-                                    color = color,
-                                    shape = CircleShape
-                                )
-                                .clickable { emoji = e },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(e, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("Pick a color", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(CollectionColorSeeds) { c ->
-                        val selected = c == color
-                        Box(
-                            Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(c)
-                                .border(
-                                    width = if (selected) 3.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    shape = CircleShape
-                                )
-                                .clickable { color = c }
-                        )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(28) },
+                placeholder = { Text("Name it (e.g. Weekend reads)") },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("Pick an emoji", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            LazyRow(
+                contentPadding = PaddingValues(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(CollectionEmojiSeeds) { e ->
+                    val selected = e == emoji
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (selected) color.copy(alpha = 0.18f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            .border(
+                                width = if (selected) 2.dp else 0.dp,
+                                color = color,
+                                shape = CircleShape
+                            )
+                            .clickable { emoji = e },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(e, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                enabled = name.isNotBlank(),
-                onClick = {
-                    onCreate(
-                        NewCollection(
-                            name = name.trim(),
-                            emoji = emoji,
-                            colorHex = color.toLongHex()
-                        )
+            Spacer(Modifier.height(12.dp))
+            Text("Pick a color", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            LazyRow(
+                contentPadding = PaddingValues(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(CollectionColorSeeds) { c ->
+                    val selected = c == color
+                    Box(
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(c)
+                            .border(
+                                width = if (selected) 3.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                shape = CircleShape
+                            )
+                            .clickable { color = c }
                     )
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = color,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("Create", fontWeight = FontWeight.Bold) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = name.isNotBlank(),
+                    onClick = {
+                        onCreate(
+                            NewCollection(
+                                name = name.trim(),
+                                emoji = emoji,
+                                colorHex = color.toLongHex()
+                            )
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = color,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Create", fontWeight = FontWeight.Bold) }
+            }
         }
-    )
+    }
 }
 
 fun Color.toLongHex(): Long {

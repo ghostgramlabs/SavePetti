@@ -189,7 +189,7 @@ fun SettingsScreen(
     editingReminderTime?.let { target ->
         val current = if (target == ReminderTimeTarget.MORNING) morningReminderTime else eveningReminderTime
         ReminderTimeDialog(
-            title = if (target == ReminderTimeTarget.MORNING) "Morning reminder time" else "Evening reminder time",
+            title = if (target == ReminderTimeTarget.MORNING) "Set morning time" else "Set evening time",
             initialHour = current.hour,
             initialMinute = current.minute,
             onDismiss = { editingReminderTime = null },
@@ -201,7 +201,7 @@ fun SettingsScreen(
                     viewModel.setEveningReminderTime(hour, minute); "Evening"
                 }
                 scope.launch {
-                    snackbarHostState.showSnackbar("$label reminders set to ${formatClock(hour, minute)}")
+                    snackbarHostState.showSnackbar("$label time set to ${formatClock(hour, minute)}")
                 }
             }
         )
@@ -408,28 +408,28 @@ fun SettingsScreen(
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Reminders") {
                 Text(
-                    "Quick reminder times",
+                    "Default reminder times",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "The times the one-tap presets fire at. \"Tonight\" uses the evening time; \"Tomorrow\", \"This weekend\", and \"Next week\" use the morning time.",
+                    "When you tap a quick reminder, this is the time of day it lands on. You can always pick an exact date and time with \"Custom\".",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(10.dp))
                 ReminderTimeRow(
                     icon = Icons.Rounded.LightMode,
-                    label = "Morning reminders",
-                    sub = "Tomorrow · This weekend · Next week",
+                    label = "Morning time",
+                    sub = "Used by Tomorrow, This weekend & Next week",
                     time = formatClock(morningReminderTime.hour, morningReminderTime.minute),
                     onClick = { editingReminderTime = ReminderTimeTarget.MORNING }
                 )
                 Spacer(Modifier.height(8.dp))
                 ReminderTimeRow(
                     icon = Icons.Rounded.DarkMode,
-                    label = "Evening reminders",
-                    sub = "Tonight",
+                    label = "Evening time",
+                    sub = "Used by Tonight",
                     time = formatClock(eveningReminderTime.hour, eveningReminderTime.minute),
                     onClick = { editingReminderTime = ReminderTimeTarget.EVENING }
                 )
@@ -447,15 +447,15 @@ fun SettingsScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Exact alarm access",
+                            "On-time reminders",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             if (hasExactAlarmPermission) {
-                                "Reminders can fire at the time you choose."
+                                "Reminders fire at the exact time you set."
                             } else {
-                                "Reminders still fire, but Android may delay them by a few minutes."
+                                "Android may delay reminders by a few minutes. Turn on exact alarms for on-the-dot delivery."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

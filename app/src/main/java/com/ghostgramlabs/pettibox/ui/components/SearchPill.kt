@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.ghostgramlabs.pettibox.ui.theme.isLightTheme
 
 /**
  * A non-editable search "pill" that opens the search screen on tap.
@@ -32,14 +33,23 @@ fun SearchPill(
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
+    // Matches SearchField: a recessed warm well + soft hairline in light mode,
+    // so the search affordance reads the same whether it's the live field or
+    // this tap-to-open pill. Dark mode keeps the raised surface look.
+    val light = isLightTheme()
+    val shape = RoundedCornerShape(16.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(scheme.surface)
-            .border(1.5.dp, scheme.outline, RoundedCornerShape(14.dp))
+            .clip(shape)
+            .background(if (light) scheme.surfaceVariant else scheme.surface)
+            .border(
+                width = if (light) 1.dp else 1.5.dp,
+                color = if (light) scheme.outline.copy(alpha = 0.6f) else scheme.outline,
+                shape = shape
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp)
     ) {

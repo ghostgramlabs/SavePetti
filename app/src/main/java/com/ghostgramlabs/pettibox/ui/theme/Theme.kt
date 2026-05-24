@@ -8,8 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
@@ -31,6 +33,12 @@ private val LightColors = lightColorScheme(
     onBackground = Soot,
     surface = PaperOff,
     onSurface = Soot,
+    // Neutralise M3's tonal-elevation overlay. Left unset it defaults to
+    // `primary`, which blends a faint persimmon cast into every elevated
+    // surface (dialogs, sheets) — making popups look subtly orange and out
+    // of step with the flat paper surfaces used everywhere else. Pointing it
+    // at the surface colour makes the overlay a no-op, so popups stay paper.
+    surfaceTint = PaperOff,
     surfaceVariant = SurfaceTint,
     onSurfaceVariant = Gravel,
     outline = PaperEdge,
@@ -52,6 +60,10 @@ private val DarkColors = darkColorScheme(
     onBackground = CreamOnDark,
     surface = SurfaceDark,
     onSurface = CreamOnDark,
+    // Same fix as light: stop the default `primary` surfaceTint from casting
+    // persimmon onto elevated dark surfaces so dark dialogs/sheets read as
+    // clean charcoal, matching the rest of the dark surfaces.
+    surfaceTint = SurfaceDark,
     surfaceVariant = SurfaceTintDark,
     onSurfaceVariant = Pebble,
     outline = OutlineDark,
@@ -59,6 +71,16 @@ private val DarkColors = darkColorScheme(
     error = PersimmonDeep,
     onError = CreamOnDark
 )
+
+/**
+ * True when the active scheme is the light "daytime shelf" palette. Used to
+ * gate light-only surface treatments (inset search fill, the dock-style
+ * bottom bar, the squircle FAB) so dark mode renders exactly as before —
+ * the same trick the SaveCard light shadow already uses, hoisted to one place.
+ */
+@Composable
+@ReadOnlyComposable
+fun isLightTheme(): Boolean = MaterialTheme.colorScheme.background.luminance() > 0.5f
 
 @Composable
 fun PettiBoxTheme(
