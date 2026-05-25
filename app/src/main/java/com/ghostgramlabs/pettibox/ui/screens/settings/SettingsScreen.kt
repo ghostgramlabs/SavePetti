@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TextSnippet
@@ -69,7 +68,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -106,7 +104,6 @@ fun SettingsScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val localBackupPath = remember { viewModel.localBackupPath() }
     val autoScanOcr by viewModel.autoScanOcr.collectAsStateWithLifecycle(initialValue = true)
     val pdfPageLimit by viewModel.pdfPageLimit.collectAsStateWithLifecycle(
         initialValue = OcrPreferences.DEFAULT_PDF_PAGES
@@ -567,7 +564,7 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "Automatic safety copy keeps recent backups on this device. Export creates a ZIP file you can put in Drive, email to yourself, or move to another phone.",
+                    body = "PettiBox keeps automatic copies on this device. Export makes a file you can save or share anywhere.",
                     icon = Icons.Rounded.Download
                 )
                 }
@@ -575,12 +572,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(16.dp))
             SettingsSection(title = "Backup") {
-                Text(
-                    "Keep a safety copy of your shelf. Automatic backup protects this device; export creates a file you can save or share elsewhere.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -624,9 +615,9 @@ fun SettingsScreen(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     if (localBackupStatus.folderUri.isBlank()) {
-                        "PettiBox keeps the 3 newest safety copies privately. On a fresh install, PettiBox only checks this backup folder automatically. Choose a folder if you also want an easy-to-find copy in Files or cloud storage."
+                        "Optional: also copy each backup to a folder in Files or another app."
                     } else {
-                        "PettiBox keeps a private safety copy and also copies backups to the folder you chose."
+                        "Backups are also copied to your chosen folder."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -641,40 +632,7 @@ fun SettingsScreen(
                         isError = true
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Private safety-copy location",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Mostly for troubleshooting. You do not need to remember this path.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                SelectionContainer {
-                    Text(
-                        // Already an absolute path from
-                        // Context.getExternalFilesDir(...).absolutePath, but
-                        // wrap explicitly + bump line height a touch so the
-                        // long path stays readable when it overflows to two
-                        // or three lines on narrow phones.
-                        localBackupPath,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 16.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        softWrap = true
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {
                         // Some OEM builds ship without a Storage Access
@@ -764,12 +722,6 @@ fun SettingsScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Restore from backup", fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Use this if your backup file is outside PettiBox's backup folder.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             // Outer NavGraph Scaffold already pads for the bottom nav, and
             // this screen's Scaffold uses WindowInsets(0) to avoid double
