@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.GridView
@@ -503,7 +504,7 @@ fun SettingsScreen(
                 HelpGroupTitle("The basics")
                 HelpItem(
                     title = "Save from any app",
-                    body = "Tap Share in another app, choose PettiBox, pick a collection, then save. Add a note or reminder only when you need it.",
+                    body = "Tap Share in another app, choose PettiBox, pick a collection, then save. You can also highlight text in any app and choose \"Save to PettiBox\" from the selection menu. Add a note or reminder only when you need it.",
                     icon = Icons.Rounded.Share
                 )
                 HelpItem(
@@ -540,6 +541,11 @@ fun SettingsScreen(
                     icon = Icons.Rounded.LocalOffer
                 )
                 HelpItem(
+                    title = "Edit anytime — it saves itself",
+                    body = "Open any save to change its title, note, or tags. Edits save automatically when you tap away or leave the screen, and a quick Undo appears in case you change your mind.",
+                    icon = Icons.Rounded.Edit
+                )
+                HelpItem(
                     title = "Archive when you're done",
                     body = "Archived saves disappear from Home but stay searchable. Use Archive instead of Delete when you may need something again.",
                     icon = Icons.Rounded.Archive
@@ -566,6 +572,11 @@ fun SettingsScreen(
                     title = "Back up your shelf",
                     body = "PettiBox keeps automatic copies on this device. Export makes a file you can save or share anywhere.",
                     icon = Icons.Rounded.Download
+                )
+                HelpItem(
+                    title = "Restore from a backup",
+                    body = "New phone, or need to recover? In the Backup section above, tap \"Restore from backup\" and pick a backup file to bring everything back.",
+                    icon = Icons.Rounded.FolderOpen
                 )
                 }
             }
