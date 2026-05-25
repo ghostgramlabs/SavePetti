@@ -49,16 +49,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -70,8 +73,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -112,6 +118,7 @@ fun DetailScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
+    val focusManager = LocalFocusManager.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     var showReminderSheet by remember { mutableStateOf(false) }
@@ -281,6 +288,13 @@ fun DetailScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
+                // Tapping empty space clears focus so the focused field (title,
+                // note, or tag) commits its edit — Compose does not blur a text
+                // field on an outside tap by itself. Children consume their own
+                // taps, so buttons, chips, and fields still behave normally.
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
                 .verticalScroll(rememberScrollState())
         ) {
             // Bold page heading + a single inline action row replace the
@@ -482,7 +496,17 @@ fun DetailScreen(
                 // field is a tap-to-edit affordance.
                 EditableTitle(
                     initial = item.title,
-                    onSave = viewModel::updateTitle
+                    onCommit = { old, new ->
+                        viewModel.updateTitle(new)
+                        scope.launch {
+                            val r = snackbarHostState.showSnackbar(
+                                message = "Title updated",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (r == SnackbarResult.ActionPerformed) viewModel.updateTitle(old)
+                        }
+                    }
                 )
 
                 // Reminder callout. Was previously surfaced only as a
@@ -571,13 +595,49 @@ fun DetailScreen(
                 TagsRow(
                     tags = state.tags.map { it.name },
                     accent = accent,
-                    onAdd = viewModel::addTag,
-                    onRemove = viewModel::removeTag,
+                    onAdd = { tag ->
+                        viewModel.addTag(tag)
+                        val clean = tag.trim().removePrefix("#")
+                        if (clean.isNotBlank() && clean.length <= 24) {
+                            scope.launch {
+                                val r = snackbarHostState.showSnackbar(
+                                    message = "Tag added",
+                                    actionLabel = "Undo",
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (r == SnackbarResult.ActionPerformed) viewModel.removeTag(clean)
+                            }
+                        }
+                    },
+                    onRemove = { tag ->
+                        viewModel.removeTag(tag)
+                        scope.launch {
+                            val r = snackbarHostState.showSnackbar(
+                                message = "Tag removed",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (r == SnackbarResult.ActionPerformed) viewModel.addTag(tag)
+                        }
+                    },
                     onOpenTag = onOpenTag
                 )
 
                 Spacer(Modifier.height(24.dp))
-                NotesEditor(initial = item.notes.orEmpty(), onSave = viewModel::updateNotes)
+                NotesEditor(
+                    initial = item.notes.orEmpty(),
+                    onCommit = { old, new ->
+                        viewModel.updateNotes(new)
+                        scope.launch {
+                            val r = snackbarHostState.showSnackbar(
+                                message = "Note updated",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (r == SnackbarResult.ActionPerformed) viewModel.updateNotes(old)
+                        }
+                    }
+                )
 
                 if (!item.ocrText.isNullOrBlank() || hasIndexableAttachments(state.attachments) || isIndexableKind(item.contentType)) {
                     Spacer(Modifier.height(24.dp))
@@ -1170,8 +1230,42 @@ private fun OcrTextSection(doc: OcrDocText) {
  * A pencil icon hints at editability; a hairline underline appears on focus
  * so the user has visual confirmation they're typing.
  */
+/**
+ * Auto-save-with-undo plumbing for a text field. Commits the buffer when the
+ * field loses focus or the screen is torn down (so an edit is never silently
+ * lost on back-navigation) and reports the pre-edit value so the caller can
+ * offer a one-tap Undo. The DB write runs in viewModelScope, so the commit
+ * still lands even as this composable leaves composition.
+ */
 @Composable
-private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
+private fun Modifier.commitFieldOnExit(
+    current: String,
+    original: String,
+    onCommit: (old: String, new: String) -> Unit,
+    onFocusChange: (Boolean) -> Unit = {}
+): Modifier {
+    val latestCurrent = rememberUpdatedState(current)
+    val latestOriginal = rememberUpdatedState(original)
+    val latestCommit = rememberUpdatedState(onCommit)
+    var wasFocused by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (latestCurrent.value != latestOriginal.value) {
+                latestCommit.value(latestOriginal.value, latestCurrent.value)
+            }
+        }
+    }
+    return this.onFocusChanged { fs ->
+        onFocusChange(fs.isFocused)
+        if (wasFocused && !fs.isFocused && latestCurrent.value != latestOriginal.value) {
+            latestCommit.value(latestOriginal.value, latestCurrent.value)
+        }
+        wasFocused = fs.isFocused
+    }
+}
+
+@Composable
+private fun EditableTitle(initial: String, onCommit: (old: String, new: String) -> Unit) {
     var value by androidx.compose.runtime.remember(initial) {
         androidx.compose.runtime.mutableStateOf(initial)
     }
@@ -1210,12 +1304,7 @@ private fun EditableTitle(initial: String, onSave: (String) -> Unit) {
                             )
                         } else m
                     }
-                    .onFocusChanged { fs ->
-                        if (focused && !fs.isFocused) {
-                            if (value != initial) onSave(value)
-                        }
-                        focused = fs.isFocused
-                    }
+                    .commitFieldOnExit(value, initial, onCommit) { focused = it }
             )
             Icon(
                 imageVector = Icons.Rounded.Edit,
@@ -1238,6 +1327,19 @@ private fun TagsRow(
     onOpenTag: (String) -> Unit
 ) {
     var input by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    var fieldFocused by remember { mutableStateOf(false) }
+    // People don't always press enter — commit a typed-but-un-entered tag when
+    // the field loses focus or the screen is torn down. addTag runs in
+    // viewModelScope and the crossref insert IGNOREs duplicates, so a pending
+    // tag lands exactly once even on back-navigation.
+    val latestInput = rememberUpdatedState(input)
+    val latestAdd = rememberUpdatedState(onAdd)
+    DisposableEffect(Unit) {
+        onDispose {
+            val pending = latestInput.value.trim()
+            if (pending.isNotEmpty()) latestAdd.value(pending)
+        }
+    }
     Column {
         Text("Tags", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
@@ -1280,10 +1382,21 @@ private fun TagsRow(
         androidx.compose.material3.OutlinedTextField(
             value = input,
             onValueChange = { input = it },
-            placeholder = { Text("Add a tag, press enter") },
+            placeholder = { Text("Add a tag") },
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { fs ->
+                    if (fieldFocused && !fs.isFocused) {
+                        val pending = input.trim()
+                        if (pending.isNotEmpty()) {
+                            onAdd(pending)
+                            input = ""
+                        }
+                    }
+                    fieldFocused = fs.isFocused
+                },
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                 onDone = {
                     onAdd(input)
@@ -1298,21 +1411,19 @@ private fun TagsRow(
 }
 
 @Composable
-private fun NotesEditor(initial: String, onSave: (String) -> Unit) {
-    var text by remember { mutableStateOf(initial) }
+private fun NotesEditor(initial: String, onCommit: (old: String, new: String) -> Unit) {
+    var text by remember(initial) { mutableStateOf(initial) }
     Column {
         Text("Your note", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = text,
-            onValueChange = {
-                text = it
-                onSave(it)
-            },
+            onValueChange = { text = it },
             placeholder = { Text("Add a thought, a reminder, why you saved this...") },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 100.dp),
+                .heightIn(min = 100.dp)
+                .commitFieldOnExit(text, initial, onCommit),
             shape = RoundedCornerShape(20.dp)
         )
     }
