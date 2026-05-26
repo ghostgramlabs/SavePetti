@@ -73,7 +73,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -289,11 +291,19 @@ fun DetailScreen(
                 .padding(padding)
                 .fillMaxSize()
                 // Tapping empty space clears focus so the focused field (title,
-                // note, or tag) commits its edit — Compose does not blur a text
-                // field on an outside tap by itself. Children consume their own
-                // taps, so buttons, chips, and fields still behave normally.
+                // note, or tag) commits its edit — Compose doesn't blur a text
+                // field on an outside tap by itself. This OBSERVES the gesture
+                // without consuming it and only acts when no child consumed the
+                // tap, so text selection / copy-paste inside the fields keep
+                // working (detectTapGestures consumed events and broke them).
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        val up = waitForUpOrCancellation()
+                        if (up != null && !up.isConsumed) {
+                            focusManager.clearFocus()
+                        }
+                    }
                 }
                 .verticalScroll(rememberScrollState())
         ) {

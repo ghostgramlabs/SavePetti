@@ -222,7 +222,9 @@ fun SaveSheet(
                     { if (it.id == suggested) -1 else 0 },
                     { recentRank[it.id] ?: Int.MAX_VALUE },
                     { if (it.userCreated) 0 else 1 },
-                    { it.sortOrder }
+                    // Within each group — your own collections first, then the
+                    // built-in starters — sort alphabetically, matching Browse.
+                    { it.name.lowercase() }
                 )
             )
         }
