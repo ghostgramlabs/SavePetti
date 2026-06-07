@@ -121,6 +121,7 @@ fun DetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val haptics = LocalHapticFeedback.current
     val focusManager = LocalFocusManager.current
+    val clipboard = LocalClipboardManager.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var viewerIndex by remember { mutableStateOf<Int?>(null) }
     var showReminderSheet by remember { mutableStateOf(false) }
@@ -154,32 +155,53 @@ fun DetailScreen(
     }
 
     if (showDeleteConfirm) {
+        val isArchived = state.item?.isArchived == true
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete this save?") },
-            text = { Text("PettiBox moves it to Archive first and gives you Undo. Archive instead if you want to keep it searchable.") },
+            title = { Text(if (isArchived) "Delete permanently?" else "Delete this save?") },
+            text = {
+                Text(
+                    if (isArchived) "This save is in your Archive. Deleting removes it for good — this can't be undone."
+                    else "We'll give you a moment to Undo before it's gone. Tap \"Archive instead\" to soft-delete (stays in Archive, can be unarchived later)."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     scope.launch {
-                        val stagedItem = viewModel.stageDelete() ?: return@launch
-                        val result = snackbarHostState.showSnackbar(
-                            message = "Moved to Archive",
-                            actionLabel = "Undo"
-                        )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            viewModel.undoStagedDelete(stagedItem)
-                        } else {
-                            viewModel.deletePermanently(stagedItem)
+                        val current = state.item ?: return@launch
+                        if (isArchived) {
+                            // Already archived → straight permanent delete.
+                            // Staging it again was the source of the
+                            // "Moved to Archive" loop bug.
+                            viewModel.deletePermanently(current)
                             onDeleted()
+                            snackbarHostState.showSnackbar("Save deleted")
+                        } else {
+                            val stagedItem = viewModel.stageDelete() ?: return@launch
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Save deleted",
+                                actionLabel = "Undo"
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                viewModel.undoStagedDelete(stagedItem)
+                            } else {
+                                viewModel.deletePermanently(stagedItem)
+                                onDeleted()
+                            }
                         }
                     }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) {
+                    Text(
+                        if (isArchived) "Delete forever" else "Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
-                    if (state.item?.isArchived != true) {
+                    if (!isArchived) {
                         TextButton(onClick = {
                             showDeleteConfirm = false
                             viewModel.setArchived(true)
@@ -551,24 +573,72 @@ fun DetailScreen(
 
                 if (!item.url.isNullOrBlank()) {
                     Spacer(Modifier.height(16.dp))
+                    // URL text is shown as a selectable monospace block so
+                    // the user can drag-select a substring (e.g. just the
+                    // domain, or a path segment) instead of being forced
+                    // to copy the whole link. The "Open original" pill
+                    // sits below for the common single-tap action.
+                    SelectionContainer {
+                        Text(
+                            item.url,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(accent.copy(alpha = 0.14f))
-                            .clickable(onClick = openOriginal)
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.OpenInNew, null, tint = accent,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            "Open original",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accent,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(accent.copy(alpha = 0.14f))
+                                .clickable(onClick = openOriginal)
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.OpenInNew, null, tint = accent,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                "Open original",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = accent,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                .clickable {
+                                    clipboard.setText(AnnotatedString(item.url))
+                                    Toast.makeText(ctx, "Link copied", Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.ContentCopy, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 8.dp).size(18.dp)
+                            )
+                            Text(
+                                "Copy",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 

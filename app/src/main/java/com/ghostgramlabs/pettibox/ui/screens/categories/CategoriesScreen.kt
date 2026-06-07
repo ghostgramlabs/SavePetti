@@ -146,15 +146,23 @@ fun CategoriesScreen(
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     val requestDelete: (SaveItemEntity) -> Unit = { item ->
         scope.launch {
-            viewModel.stageDelete(item)
-            val result = snackbarHostState.showSnackbar(
-                message = "Moved to Archive",
-                actionLabel = "Undo"
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                viewModel.undoStagedDelete(item)
-            } else {
+            if (item.isArchived) {
+                // From the Archive view, Delete is permanent — staging it
+                // back into archive (where it already lives) was the bug
+                // that made the row appear to never go away.
                 viewModel.deletePermanently(item)
+                snackbarHostState.showSnackbar("Save deleted")
+            } else {
+                viewModel.stageDelete(item)
+                val result = snackbarHostState.showSnackbar(
+                    message = "Save deleted",
+                    actionLabel = "Undo"
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.undoStagedDelete(item)
+                } else {
+                    viewModel.deletePermanently(item)
+                }
             }
         }
     }
@@ -250,15 +258,26 @@ fun CategoriesScreen(
                         selectedItems = emptySet()
                         selectionMode = false
                         scope.launch {
-                            viewModel.stageDeleteItems(items)
-                            val result = snackbarHostState.showSnackbar(
-                                message = if (items.size == 1) "Moved to Archive" else "${items.size} saves moved to Archive",
-                                actionLabel = "Undo"
-                            )
-                            if (result == SnackbarResult.ActionPerformed) {
-                                viewModel.undoStagedDeleteItems(items)
-                            } else {
+                            if (items.all { it.isArchived }) {
+                                // Bulk delete inside the Archive view —
+                                // permanent, no Undo, no misleading
+                                // "Moved to Archive" detour.
                                 viewModel.deleteItemsPermanently(items)
+                                snackbarHostState.showSnackbar(
+                                    if (items.size == 1) "Save deleted"
+                                    else "${items.size} saves deleted"
+                                )
+                            } else {
+                                viewModel.stageDeleteItems(items)
+                                val result = snackbarHostState.showSnackbar(
+                                    message = if (items.size == 1) "Save deleted" else "${items.size} saves deleted",
+                                    actionLabel = "Undo"
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.undoStagedDeleteItems(items)
+                                } else {
+                                    viewModel.deleteItemsPermanently(items)
+                                }
                             }
                         }
                     },
@@ -675,15 +694,34 @@ private fun DrillView(
         items.loadState.refresh is androidx.paging.LoadState.NotLoading
 
     if (showBulkDeleteConfirm) {
+        // Inside Archive view the selection is already-archived items,
+        // so the dialog has to be honest about "this is permanent."
+        val allArchivedSelected = selectedVisibleItems.isNotEmpty() &&
+            selectedVisibleItems.all { it.isArchived }
         AlertDialog(
             onDismissRequest = { showBulkDeleteConfirm = false },
-            title = { Text("Delete ${selectedVisibleItems.size} selected?") },
-            text = { Text("PettiBox moves them to Archive first and gives you Undo. Archive instead if you want to keep them searchable.") },
+            title = {
+                Text(
+                    if (allArchivedSelected) "Delete ${selectedVisibleItems.size} permanently?"
+                    else "Delete ${selectedVisibleItems.size} selected?"
+                )
+            },
+            text = {
+                Text(
+                    if (allArchivedSelected) "These saves are in your Archive. Deleting removes them for good — this can't be undone."
+                    else "We'll give you a moment to Undo before they're gone for good."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showBulkDeleteConfirm = false
                     onDeleteSelected(selectedVisibleItems)
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) {
+                    Text(
+                        if (allArchivedSelected) "Delete forever" else "Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") }

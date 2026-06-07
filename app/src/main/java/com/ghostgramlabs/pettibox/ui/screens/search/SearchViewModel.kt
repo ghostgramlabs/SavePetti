@@ -231,7 +231,10 @@ class SearchViewModel @Inject constructor(
     }
 
     suspend fun stageDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, true)
+        // is_pending_delete hides the row everywhere during the Undo
+        // window so the user doesn't see the supposedly-deleted save
+        // pop up in Archive.
+        repo.setPendingDelete(item.id, true)
         if (item.remindAt != null) {
             repo.setRemindAt(item.id, null)
             ReminderScheduler.cancel(appContext, item.id)
@@ -239,7 +242,7 @@ class SearchViewModel @Inject constructor(
     }
 
     suspend fun undoStagedDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, item.isArchived)
+        repo.setPendingDelete(item.id, false)
         if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
             repo.setRemindAt(item.id, item.remindAt)
             ReminderScheduler.schedule(appContext, item.id, item.remindAt)

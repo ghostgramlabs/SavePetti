@@ -96,15 +96,23 @@ fun SearchScreen(
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     val requestDelete: (SaveItemEntity) -> Unit = { item ->
         scope.launch {
-            viewModel.stageDelete(item)
-            val result = snackbarHostState.showSnackbar(
-                message = "Moved to Archive",
-                actionLabel = "Undo"
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                viewModel.undoStagedDelete(item)
-            } else {
+            if (item.isArchived) {
+                // Archived → permanent. Without this branch, the snackbar
+                // claimed "Moved to Archive" while the row sat exactly
+                // where it was, looking like the action did nothing.
                 viewModel.deletePermanently(item)
+                snackbarHostState.showSnackbar("Save deleted")
+            } else {
+                viewModel.stageDelete(item)
+                val result = snackbarHostState.showSnackbar(
+                    message = "Save deleted",
+                    actionLabel = "Undo"
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.undoStagedDelete(item)
+                } else {
+                    viewModel.deletePermanently(item)
+                }
             }
         }
     }

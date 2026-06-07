@@ -38,6 +38,7 @@ class SaveRepository @Inject constructor(
     private val attachmentStore: AttachmentStore
 ) {
 
+
     data class BackupImportResult(
         val categories: Int,
         val saves: Int,
@@ -77,6 +78,17 @@ class SaveRepository @Inject constructor(
                 }
             }
         }
+        // Sweep up a legacy "clipboard" preset from the earlier WIP that
+        // briefly seeded clipboard as a collection. We moved it to a
+        // source-app-tagged hub instead, so the category should not be
+        // sitting in the user's collection grid. Delete only if it's
+        // still a non-user-created row — never clobber a stash the user
+        // actually created themselves.
+        categoryDao.getById("clipboard")?.let { legacy ->
+            if (!legacy.userCreated) {
+                categoryDao.delete("clipboard")
+            }
+        }
     }
 
     // ── Save items ────────────────────────────────────────────────────────
@@ -97,6 +109,18 @@ class SaveRepository @Inject constructor(
         val uris = attachmentDao.urisForItem(id)
         saveDao.delete(id) // cascades attachments + item_tags
         attachmentStore.deleteByUris(uris)
+    }
+
+    /**
+     * Sweep any rows left in the `is_pending_delete` state from a
+     * previous session (force-stop, process death, OS kill during the
+     * Undo window). Called once on app start. Files for those rows are
+     * cleaned up too — without this they'd accumulate forever.
+     */
+    suspend fun sweepOrphanedPendingDeletes() {
+        val uris = saveDao.urisForPendingDeletes()
+        saveDao.permanentlyDeletePending()
+        if (uris.isNotEmpty()) attachmentStore.deleteByUris(uris)
     }
 
     fun observeRecent(limit: Int = 20) = saveDao.observeRecent(limit)
@@ -140,6 +164,12 @@ class SaveRepository @Inject constructor(
     suspend fun setFavorite(id: Long, fav: Boolean) = saveDao.setFavorite(id, fav)
     suspend fun setPinned(id: Long, pin: Boolean) = saveDao.setPinned(id, pin)
     suspend fun setArchived(id: Long, archived: Boolean) = saveDao.setArchived(id, archived)
+    /**
+     * Set the row's [SaveItemEntity.isPendingDelete] flag. Used by the
+     * "Delete with Undo" flow to hide a row from every listing query —
+     * including Archive — without losing it so Undo can clear the flag.
+     */
+    suspend fun setPendingDelete(id: Long, pending: Boolean) = saveDao.setPendingDelete(id, pending)
     suspend fun setRemindAt(id: Long, at: Long?) = saveDao.setRemindAt(id, at)
     suspend fun dueReminders(): List<SaveItemEntity> = saveDao.dueReminders()
     /** Reschedule helper: every item that still has a reminder pointed at it. */

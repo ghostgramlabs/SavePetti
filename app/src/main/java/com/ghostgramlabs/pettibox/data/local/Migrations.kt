@@ -20,4 +20,19 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2)
+/**
+ * v2 → v3: adds is_pending_delete. Used as the staging flag for the
+ * "Delete with Undo" flow so an in-flight delete is hidden from every
+ * listing (including Archive). The Undo window is short (~5 s); on
+ * app cold start anything still pending-delete is swept by
+ * [com.ghostgramlabs.pettibox.PettiBoxApp] under the assumption that
+ * the user (or a force-stop) committed to the delete.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE save_items ADD COLUMN is_pending_delete INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_save_items_is_pending_delete ON save_items(is_pending_delete)")
+    }
+}
+
+val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

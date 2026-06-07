@@ -4,8 +4,10 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 /**
- * Schema v2 — adds is_archived + remind_at columns on save_items for the
- * archive and reminders features. See [MIGRATION_1_2] for the migration.
+ * Schema v3 — adds is_pending_delete on save_items so the "Delete with
+ * Undo" flow can hide the row from every listing during the Undo
+ * window without lying about its location (it's no longer staged in
+ * Archive). See [MIGRATION_2_3].
  */
 @Database(
     entities = [
@@ -16,7 +18,7 @@ import androidx.room.RoomDatabase
         TagEntity::class,
         ItemTagCrossRef::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

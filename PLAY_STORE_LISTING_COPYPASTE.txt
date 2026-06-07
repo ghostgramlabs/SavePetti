@@ -1,0 +1,70 @@
+APP NAME
+PettiBox: Save & Find
+
+SHORT DESCRIPTION
+Save links, screenshots, PDFs and notes offline. Search text inside images.
+
+FULL DESCRIPTION
+PettiBox is a private, offline-first shelf for everything you want to save now and find later.
+
+Use the Android share menu to save links, screenshots, notes, images, PDFs, documents and files from the apps you already use. PettiBox keeps them organized in one calm place, so useful things do not get lost in bookmarks, chats, downloads or gallery screenshots.
+
+Save from any app
+
+Share into PettiBox from Chrome, YouTube, Instagram, Reddit, WhatsApp, TikTok, X, Gallery, Files and other apps that support Android sharing. You can also add a quick note, paste a link, pick images or save a document directly from PettiBox.
+
+Find saved content fast
+
+Search titles, notes, links, tags, sources and text found inside images or PDFs. PettiBox uses on-device text recognition to index screenshots and documents for offline search. OCR works best with clear English text and can be rescanned from Settings when needed.
+
+Organize your digital life
+
+Create collections for recipes, study notes, work links, shopping ideas, travel plans, inspiration, documents and personal memories. Add tags, mark favorites, pin important saves, archive old items and move saves between collections without clutter.
+
+Built for everyday saving
+
+PettiBox supports links, notes, text, images, screenshots, PDFs and general files. Link previews and YouTube thumbnails make saved links easier to recognize. Multiple image or file attachments can stay together as one save, so related material remains easy to browse.
+
+Reminders when you need them
+
+Add a reminder while saving or later from an item. PettiBox can nudge you about a recipe to cook, a document to review, a video to watch, a shopping idea to revisit or anything else you saved for later.
+
+Private by design
+
+Your saves stay on your device. PettiBox does not require an account, subscription or cloud sync for its core features. Internet access is only used for optional link previews and remote thumbnail loading; saving, organizing, OCR search and browsing are built around local storage.
+
+Backup and restore
+
+Export a PettiBox backup whenever you want. Backups can include your saved items, collections, tags, notes, favorites, archived items and attachments, so you stay in control of your own library.
+
+Great for saving:
+
+Recipes and meal ideas
+Reddit posts and articles
+Study materials and class notes
+Shopping ideas and wish lists
+Travel plans and places
+Work links and documents
+Screenshots with important text
+PDFs, files and reference material
+Personal memories and inspiration
+
+PettiBox helps you collect the useful pieces of your digital life, keep them private, and find them again with fast offline search.
+
+Save now. Find later. Stay organized.
+
+PROMO TEXT OPTION 1
+Save anything from any app and find it later with offline OCR search.
+
+PROMO TEXT OPTION 2
+One private shelf for links, screenshots, notes, PDFs and files.
+
+SCREENSHOT CAPTIONS
+Save links, screenshots, notes and files from any app.
+Pick a collection and add tags before saving.
+Search titles, notes, tags and text inside screenshots.
+Browse colorful collections for work, study, recipes and travel.
+Pin favorites and revisit important saves faster.
+Add reminders for things you want to come back to.
+Export a private backup and restore your shelf anytime.
+Keep your saves on your device, with no account required.

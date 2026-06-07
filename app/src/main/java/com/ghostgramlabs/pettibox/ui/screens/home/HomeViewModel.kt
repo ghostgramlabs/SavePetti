@@ -175,7 +175,10 @@ class HomeViewModel @Inject constructor(
     }
 
     suspend fun stageDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, true)
+        // Hide via is_pending_delete (not is_archived) so the row leaves
+        // every listing — Home, Browse, Archive, Clipboard, counts — and
+        // the user can't see it in any "interim" location during Undo.
+        repo.setPendingDelete(item.id, true)
         if (item.remindAt != null) {
             repo.setRemindAt(item.id, null)
             ReminderScheduler.cancel(appContext, item.id)
@@ -183,7 +186,7 @@ class HomeViewModel @Inject constructor(
     }
 
     suspend fun undoStagedDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, item.isArchived)
+        repo.setPendingDelete(item.id, false)
         if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
             repo.setRemindAt(item.id, item.remindAt)
             ReminderScheduler.schedule(appContext, item.id, item.remindAt)

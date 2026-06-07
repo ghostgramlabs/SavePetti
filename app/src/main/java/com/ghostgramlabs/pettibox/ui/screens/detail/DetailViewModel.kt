@@ -77,7 +77,12 @@ class DetailViewModel @Inject constructor(
     }
     suspend fun stageDelete(): SaveItemEntity? {
         val it = state.value.item ?: return null
-        repo.setArchived(it.id, true)
+        // is_pending_delete instead of is_archived: the row disappears
+        // from every listing during the Undo window, including Archive,
+        // and the user's original is_archived state is preserved for
+        // Undo. observeById is unfiltered, so the Detail screen the
+        // user is currently staring at keeps rendering the item.
+        repo.setPendingDelete(it.id, true)
         if (it.remindAt != null) {
             repo.setRemindAt(it.id, null)
             ReminderScheduler.cancel(appContext, it.id)
@@ -85,7 +90,7 @@ class DetailViewModel @Inject constructor(
         return it
     }
     suspend fun undoStagedDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, item.isArchived)
+        repo.setPendingDelete(item.id, false)
         if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
             repo.setRemindAt(item.id, item.remindAt)
             ReminderScheduler.schedule(appContext, item.id, item.remindAt)

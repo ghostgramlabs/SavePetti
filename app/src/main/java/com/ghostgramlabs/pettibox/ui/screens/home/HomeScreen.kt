@@ -1,10 +1,10 @@
 package com.ghostgramlabs.pettibox.ui.screens.home
 
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachFile
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Image
@@ -270,6 +271,28 @@ fun HomeScreen(
                 showChooser = false
                 showLinkDialog = true
             },
+            onPickPaste = {
+                showChooser = false
+                // Manual one-tap "direct copy to PettiBox": read the
+                // primary clip, route URLs to a LINK save and anything
+                // else to a NOTE — both via the existing SaveSheet so
+                // the user can still tweak title/category before
+                // committing. Reading happens on tap, not on chooser
+                // open, so we don't trigger the Android 12+ "pasted
+                // from clipboard" toast for users who didn't pick this.
+                val text = readClipboardText(ctx)?.trim().orEmpty()
+                if (text.isBlank()) {
+                    Toast.makeText(ctx, "Nothing on clipboard to save", Toast.LENGTH_SHORT).show()
+                } else {
+                    val isUrl = text.startsWith("http://", ignoreCase = true) ||
+                        text.startsWith("https://", ignoreCase = true)
+                    pendingShare = if (isUrl) {
+                        IncomingShare(text = text, urls = listOf(text), mimeType = "text/plain")
+                    } else {
+                        IncomingShare(text = text, mimeType = "text/plain")
+                    }
+                }
+            },
             onPickImage = {
                 showChooser = false
                 pickImages.launch(
@@ -307,15 +330,27 @@ fun HomeScreen(
     val requestNotificationPermission = rememberNotificationPermissionRequester()
     val requestDelete: (SaveItemEntity) -> Unit = { item ->
         scope.launch {
-            viewModel.stageDelete(item)
-            val result = snackbarHostState.showSnackbar(
-                message = "Moved to Archive",
-                actionLabel = "Undo"
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                viewModel.undoStagedDelete(item)
-            } else {
+            if (item.isArchived) {
+                // Already in Archive — Delete here means permanent. Skipping
+                // the stage step means we don't lie with "Moved to Archive"
+                // (it was already there), and the row actually disappears.
                 viewModel.deletePermanently(item)
+                snackbarHostState.showSnackbar("Save deleted")
+            } else {
+                viewModel.stageDelete(item)
+                // Stage-into-archive remains under the hood — it's how
+                // we make Undo work without an in-memory snapshot — but
+                // the user-facing copy now matches the button they
+                // pressed ("Delete"), not the implementation detail.
+                val result = snackbarHostState.showSnackbar(
+                    message = "Save deleted",
+                    actionLabel = "Undo"
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.undoStagedDelete(item)
+                } else {
+                    viewModel.deletePermanently(item)
+                }
             }
         }
     }
@@ -1126,6 +1161,7 @@ private fun AddChooserSheet(
     onDismiss: () -> Unit,
     onPickNote: () -> Unit,
     onPickLink: () -> Unit,
+    onPickPaste: () -> Unit,
     onPickImage: () -> Unit,
     onPickFile: () -> Unit
 ) {
@@ -1171,6 +1207,18 @@ private fun AddChooserSheet(
                 title = "Link",
                 subtitle = "Paste a URL — we'll fetch the title",
                 onClick = onPickLink
+            )
+            Spacer(Modifier.height(8.dp))
+            // One-tap clipboard import — sits next to Link/Note since it
+            // routes to whichever fits what's on the clipboard. Saves a
+            // detour through the Link dialog or the Note paste-keyboard
+            // dance, and is the manual replacement for the auto-capture
+            // flow that was removed.
+            ChooserRow(
+                icon = Icons.Rounded.ContentPaste,
+                title = "Paste",
+                subtitle = "Save whatever's on your clipboard",
+                onClick = onPickPaste
             )
             Spacer(Modifier.height(8.dp))
             ChooserRow(
@@ -1304,12 +1352,22 @@ private fun AddLinkSheet(
 }
 
 private fun clipboardUrl(ctx: Context): String? {
-    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
-    val text = runCatching {
-        cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
-    }.getOrNull()?.trim().orEmpty()
+    val text = readClipboardText(ctx)?.trim().orEmpty()
     if (text.isBlank()) return null
     val starts = text.startsWith("http://", ignoreCase = true) ||
         text.startsWith("https://", ignoreCase = true)
     return if (starts) text else null
+}
+
+/**
+ * One-shot read of the primary clip, used by the manual Add-Link sheet
+ * to pre-fill the URL field. Triggers the Android 12+ system "PettiBox
+ * pasted from clipboard" toast — fine here because the user just
+ * actively opened the link-add flow themselves.
+ */
+private fun readClipboardText(ctx: Context): String? {
+    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return null
+    return runCatching {
+        cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()
+    }.getOrNull()
 }

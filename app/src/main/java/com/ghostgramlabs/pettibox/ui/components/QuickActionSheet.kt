@@ -85,14 +85,24 @@ fun QuickActionSheet(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete this save?") },
-            text = { Text("PettiBox moves it to Archive first and gives you Undo. Archive instead if you want to keep it searchable.") },
+            title = { Text(if (item.isArchived) "Delete permanently?" else "Delete this save?") },
+            text = {
+                Text(
+                    if (item.isArchived) "This save is in your Archive. Deleting removes it for good — this can't be undone."
+                    else "We'll give you a moment to Undo before it's gone. Tap \"Archive instead\" to soft-delete (stays in Archive, can be unarchived later)."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onDelete()
                     onDismiss()
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) {
+                    Text(
+                        if (item.isArchived) "Delete forever" else "Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             },
             dismissButton = {
                 Row {

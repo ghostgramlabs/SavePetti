@@ -12,6 +12,11 @@ enum class SourceApp(val displayName: String, val emoji: String) {
     SPOTIFY("Spotify", "\uD83C\uDFB5"),
     AMAZON("Amazon", "\uD83D\uDCE6"),
     FILES("Files", "\uD83D\uDCC1"),
+    // Auto-captured by the clipboard-on-foreground flow. Tagged at the
+    // source rather than via category_id so users can still file these
+    // into any of their own collections without losing the "captured
+    // from clipboard" provenance.
+    CLIPBOARD("Clipboard", "\uD83D\uDCCB"),
     UNKNOWN("Other", "\u2728");
 
     companion object {

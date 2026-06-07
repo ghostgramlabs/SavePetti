@@ -36,6 +36,13 @@ class PettiBoxApp : Application(), Configuration.Provider {
         // ignores duplicate registrations after the first one took effect.
         ReminderNotifications.ensureChannel(this)
         appScope.launch { repository.seedCategoriesIfEmpty() }
+        // Sweep rows that were mid-flight in the "Delete with Undo"
+        // staging when the process died (force-stop, OS kill, user
+        // closed PettiBox during the Undo snackbar). They're invisible
+        // anyway because every listing query filters
+        // is_pending_delete = 0; without this sweep they'd accumulate
+        // in the DB forever with their attachment files orphaned.
+        appScope.launch { repository.sweepOrphanedPendingDeletes() }
         // Reconcile the saved backup preference with WorkManager state on
         // every cold start. If the user enabled auto-backup but the
         // WorkManager db got wiped (data clear, fresh install over old

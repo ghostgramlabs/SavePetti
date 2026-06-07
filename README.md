@@ -35,3 +35,7 @@ On Windows PowerShell, use `.\gradlew.bat :app:assembleDebug`.
 ## Stack
 
 Kotlin, Jetpack Compose, Material 3, Room with FTS4, Hilt, WorkManager, ML Kit text recognition, Coil, and Jsoup.
+
+## Store Listing
+
+Play Store metadata, ASO keywords, screenshot captions, and audit notes live in `PLAY_STORE_LISTING.md`.

@@ -241,7 +241,10 @@ class CategoriesViewModel @Inject constructor(
     }
 
     suspend fun stageDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, true)
+        // is_pending_delete hides the row from every listing during the
+        // Undo window; is_archived is left alone so Undo lands the row
+        // exactly where the user had it.
+        repo.setPendingDelete(item.id, true)
         if (item.remindAt != null) {
             repo.setRemindAt(item.id, null)
             ReminderScheduler.cancel(appContext, item.id)
@@ -249,7 +252,7 @@ class CategoriesViewModel @Inject constructor(
     }
 
     suspend fun undoStagedDelete(item: SaveItemEntity) {
-        repo.setArchived(item.id, item.isArchived)
+        repo.setPendingDelete(item.id, false)
         if (item.remindAt != null && item.remindAt > System.currentTimeMillis()) {
             repo.setRemindAt(item.id, item.remindAt)
             ReminderScheduler.schedule(appContext, item.id, item.remindAt)

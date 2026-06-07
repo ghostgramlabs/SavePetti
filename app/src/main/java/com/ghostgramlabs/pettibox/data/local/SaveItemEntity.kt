@@ -36,6 +36,7 @@ import androidx.room.PrimaryKey
         Index("is_pinned"),
         Index("opened_at"),
         Index("is_archived"),
+        Index("is_pending_delete"),
         Index("remind_at"),
         Index(value = ["category_id", "created_at"], name = "idx_save_items_cat_time"),
         Index(value = ["source_app", "created_at"], name = "idx_save_items_src_time")
@@ -58,6 +59,11 @@ data class SaveItemEntity(
     // Soft-deleted ("I'm done with this") items still exist for search and
     // restore, but disappear from Home and the default Browse view.
     @ColumnInfo(name = "is_archived") val isArchived: Boolean = false,
+    // Set while an actual delete is staged in the UI (Undo snackbar
+    // window). Hides the row from every listing query — including
+    // Archive — without losing it from the DB so Undo can clear the
+    // flag. App cold-start sweeps anything left in this state.
+    @ColumnInfo(name = "is_pending_delete") val isPendingDelete: Boolean = false,
     // Epoch millis at which the user wants a reminder notification. Null
     // means no reminder pending. The notification clears this back to null
     // when it fires.
