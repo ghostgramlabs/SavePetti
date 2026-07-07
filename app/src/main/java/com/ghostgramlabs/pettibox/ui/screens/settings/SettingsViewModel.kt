@@ -131,6 +131,14 @@ class SettingsViewModel @Inject constructor(
     suspend fun removeEmptyStarterCollections(): SaveRepository.StarterSweepResult =
         repo.removeEmptyStarterCollections()
 
+    /** Portable bookmark CSV of every link, written to a shareable cache file. */
+    suspend fun exportCsvFile(): Pair<File, Int> {
+        val result = repo.exportBookmarksCsv()
+        val file = File(appContext.cacheDir, "pettibox-links-${System.currentTimeMillis()}.csv")
+        file.writeText(result.csv)
+        return file to result.links
+    }
+
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 
     suspend fun exportBackupZipFile(): Pair<File, SaveRepository.BackupExportResult> {

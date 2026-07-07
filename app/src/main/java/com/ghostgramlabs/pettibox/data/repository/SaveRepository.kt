@@ -16,6 +16,7 @@ import com.ghostgramlabs.pettibox.data.local.TagDao
 import com.ghostgramlabs.pettibox.data.local.TagEntity
 import com.ghostgramlabs.pettibox.data.local.TagWithCount
 import com.ghostgramlabs.pettibox.data.backup.BackupSummaryCalculator
+import com.ghostgramlabs.pettibox.data.bookmarks.BookmarkCsvWriter
 import com.ghostgramlabs.pettibox.data.bookmarks.ImportedBookmark
 import com.ghostgramlabs.pettibox.data.util.AttachmentStore
 import com.ghostgramlabs.pettibox.domain.model.CategoryPalette
@@ -203,6 +204,37 @@ class SaveRepository @Inject constructor(
     suspend fun upsertCategory(c: CategoryEntity) = categoryDao.upsert(c)
     suspend fun getCategory(id: String) = categoryDao.getById(id)
     suspend fun deleteCategory(id: String) = categoryDao.delete(id)
+
+    data class CsvExportResult(val csv: String, val links: Int)
+
+    /**
+     * Every save that has a URL, as portable bookmark CSV (see
+     * [BookmarkCsvWriter] for the column contract). Links only — notes,
+     * images, and files have no URL for other apps to open; the zip
+     * backup remains the full-fidelity export.
+     */
+    suspend fun exportBookmarksCsv(): CsvExportResult {
+        val categoryNames = categoryDao.allForExport().associate { it.id to it.name }
+        val tagNames = tagDao.allForExport().associate { it.id to it.name }
+        val tagsByItem = tagDao.linksForExport()
+            .groupBy({ it.itemId }, { tagNames[it.tagId] })
+            .mapValues { (_, names) -> names.filterNotNull() }
+        val bookmarks = saveDao.allForExport()
+            .filter { !it.url.isNullOrBlank() }
+            .map { s ->
+                ImportedBookmark(
+                    url = s.url.orEmpty(),
+                    title = s.title,
+                    folder = s.categoryId?.let { categoryNames[it] },
+                    tags = tagsByItem[s.id].orEmpty(),
+                    notes = s.notes,
+                    createdAt = s.createdAt,
+                    isFavorite = s.isFavorite,
+                    isArchived = s.isArchived
+                )
+            }
+        return CsvExportResult(csv = BookmarkCsvWriter.write(bookmarks), links = bookmarks.size)
+    }
 
     /**
      * One-tap cleanup for users who don't want the prefilled starters.

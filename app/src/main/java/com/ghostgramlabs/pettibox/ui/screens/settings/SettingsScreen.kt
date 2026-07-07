@@ -1053,11 +1053,12 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            SettingsSection(title = "Import from other apps") {
+            SettingsSection(title = "Move between apps") {
                 Text(
-                    "Moving from Chrome, Firefox, Raindrop.io, Pocket, or another bookmark app? " +
+                    "Coming from Chrome, Firefox, Raindrop.io, Pocket, or another bookmark app? " +
                         "Export your bookmarks there as an HTML or CSV file, then bring that file in here. " +
-                        "Folders become collections, tags come along, and links you already have are skipped.",
+                        "Folders become collections, tags come along, and links you already have are skipped. " +
+                        "Going the other way? Export your links as a CSV any app can read.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1088,6 +1089,38 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Import bookmarks file", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            busyLabel = "Preparing CSV"
+                            runCatching { viewModel.exportCsvFile() }
+                                .onSuccess { (file, links) ->
+                                    when {
+                                        links == 0 -> snackbarHostState.showSnackbar(
+                                            "No links to export yet — the CSV covers saves that have a web address"
+                                        )
+                                        !shareCsvFile(ctx, file) -> snackbarHostState.showSnackbar(
+                                            "Couldn't export the CSV"
+                                        )
+                                        else -> snackbarHostState.showSnackbar(
+                                            "Exported $links ${if (links == 1) "link" else "links"} as CSV"
+                                        )
+                                    }
+                                }
+                                .onFailure {
+                                    snackbarHostState.showSnackbar("Couldn't export the CSV")
+                                }
+                            busyLabel = null
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Export links as CSV", fontWeight = FontWeight.Bold)
                 }
             }
             // Outer NavGraph Scaffold already pads for the bottom nav, and
@@ -1671,17 +1704,29 @@ private fun ThemeChoice(
     }
 }
 
-private fun shareBackupFile(ctx: Context, file: File): Boolean {
+private fun shareBackupFile(ctx: Context, file: File): Boolean =
+    shareExportFile(ctx, file, "application/zip", "PettiBox backup", "Export PettiBox backup")
+
+private fun shareCsvFile(ctx: Context, file: File): Boolean =
+    shareExportFile(ctx, file, "text/csv", "PettiBox links", "Export links as CSV")
+
+private fun shareExportFile(
+    ctx: Context,
+    file: File,
+    mime: String,
+    subject: String,
+    chooserTitle: String
+): Boolean {
     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
     val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "application/zip"
+        type = mime
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_SUBJECT, "PettiBox backup")
+        putExtra(Intent.EXTRA_SUBJECT, subject)
         clipData = ClipData.newUri(ctx.contentResolver, file.name, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     return runCatching {
-        ctx.startActivity(Intent.createChooser(intent, "Export PettiBox backup"))
+        ctx.startActivity(Intent.createChooser(intent, chooserTitle))
     }.isSuccess
 }
 
