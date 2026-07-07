@@ -19,6 +19,7 @@ class OnboardingPreferences @Inject constructor(
 ) {
     private val completedKey = booleanPreferencesKey("home_onboarding_completed")
     private val handledBackupKey = stringPreferencesKey("handled_backup_restore_file")
+    private val categoriesSeededKey = booleanPreferencesKey("default_categories_seeded")
 
     val showHomeOnboarding: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
         prefs[completedKey] != true
@@ -37,6 +38,21 @@ class OnboardingPreferences @Inject constructor(
     suspend fun markBackupRestorePromptHandled(fileName: String) {
         context.onboardingDataStore.edit { prefs ->
             prefs[handledBackupKey] = fileName
+        }
+    }
+
+    /**
+     * Starter collections are seeded exactly once per install. They used to
+     * be re-asserted on every launch, but now that users can rename and
+     * delete them, re-seeding would resurrect deleted ones and undo edits.
+     */
+    val categoriesSeeded: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
+        prefs[categoriesSeededKey] == true
+    }
+
+    suspend fun markCategoriesSeeded() {
+        context.onboardingDataStore.edit { prefs ->
+            prefs[categoriesSeededKey] = true
         }
     }
 }

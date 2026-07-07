@@ -66,7 +66,16 @@ class SaveRepository @Inject constructor(
         val newCollections: Int
     )
 
-    suspend fun seedCategoriesIfEmpty() {
+    /**
+     * Seed the starter collections. Runs ONCE per install (the caller
+     * gates on [com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences.categoriesSeeded]).
+     * Starters are fully user-editable and deletable now, so this must
+     * never re-assert them on later launches — that would resurrect
+     * deleted collections and clobber renames. The IGNORE insert keeps
+     * the one legacy case safe: existing installs run this once more to
+     * pick up the seeded flag without touching their current rows.
+     */
+    suspend fun seedDefaultCategories() {
         val defaults = CategoryPalette.Defaults.mapIndexed { i, p ->
             CategoryEntity(
                 id = p.id,
@@ -76,18 +85,7 @@ class SaveRepository @Inject constructor(
                 sortOrder = i
             )
         }
-        if (categoryDao.count() == 0) {
-            categoryDao.insertAll(defaults)
-        } else {
-            defaults.forEach { category ->
-                val existing = categoryDao.getById(category.id)
-                if (existing == null) {
-                    categoryDao.upsert(category)
-                } else if (!existing.userCreated) {
-                    categoryDao.upsert(category.copy(createdAt = existing.createdAt))
-                }
-            }
-        }
+        categoryDao.insertAll(defaults)
         // Sweep up a legacy "clipboard" preset from the earlier WIP that
         // briefly seeded clipboard as a collection. We moved it to a
         // source-app-tagged hub instead, so the category should not be

@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
+import com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences
 import com.ghostgramlabs.pettibox.data.reminders.ReminderNotifications
 import com.ghostgramlabs.pettibox.data.reminders.ReminderScheduler
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
@@ -22,6 +23,7 @@ class PettiBoxApp : Application(), Configuration.Provider {
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var repository: SaveRepository
     @Inject lateinit var backupPreferences: BackupPreferences
+    @Inject lateinit var onboardingPreferences: OnboardingPreferences
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -35,7 +37,15 @@ class PettiBoxApp : Application(), Configuration.Provider {
         // Register the notification channel up-front. Idempotent — the OS
         // ignores duplicate registrations after the first one took effect.
         ReminderNotifications.ensureChannel(this)
-        appScope.launch { repository.seedCategoriesIfEmpty() }
+        // Seed starter collections once per install. Users can rename and
+        // delete starters now, so seeding must never re-run — the flag,
+        // not the table contents, decides.
+        appScope.launch {
+            if (!onboardingPreferences.categoriesSeeded.first()) {
+                repository.seedDefaultCategories()
+                onboardingPreferences.markCategoriesSeeded()
+            }
+        }
         // Sweep rows that were mid-flight in the "Delete with Undo"
         // staging when the process died (force-stop, OS kill, user
         // closed PettiBox during the Undo snackbar). They're invisible

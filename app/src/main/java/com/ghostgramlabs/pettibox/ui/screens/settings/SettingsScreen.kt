@@ -164,12 +164,10 @@ fun SettingsScreen(
             // "settings → edit thing → trash" path. We confirm via a
             // separate AlertDialog so an accidental tap doesn't nuke a
             // collection (and its saves' category links) silently.
-            onDelete = if (target.userCreated) {
-                {
-                    editingCollection = null
-                    deletingCollection = target
-                }
-            } else null
+            onDelete = {
+                editingCollection = null
+                deletingCollection = target
+            }
         )
     }
 
@@ -1440,10 +1438,9 @@ private fun ReminderTimeDialog(
 }
 
 /**
- * Compact in-Settings collection manager. Settings is only for custom
- * collections the user can manage; built-in starter collections stay in
- * Browse and in the save sheet, where they behave like stable system
- * shortcuts instead of editable settings rows.
+ * Compact in-Settings collection manager. Lists every collection —
+ * starters included, since those are fully renameable/deletable now —
+ * with the user's own shelves first.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1453,15 +1450,17 @@ private fun CollectionsManager(
     onEditCollection: (CategoryEntity) -> Unit
 ) {
     val customCollections = remember(collections) {
-        collections
-            .filter { it.userCreated }
-            .sortedByDescending { it.createdAt }
+        collections.sortedWith(
+            compareByDescending<CategoryEntity> { it.userCreated }
+                .thenByDescending { it.createdAt }
+                .thenBy { it.sortOrder }
+        )
     }
     Text(
         if (customCollections.isEmpty()) {
-            "Starter collections are ready in Browse. Create your own only when you need a personal shelf like \"Trip ideas\" or \"Client work\"."
+            "No collections yet. Create one whenever you need a shelf like \"Trip ideas\" or \"Client work\"."
         } else {
-            "You have ${customCollections.size} custom collection${if (customCollections.size == 1) "" else "s"}. Tap one to rename or delete."
+            "Tap any collection to rename it, change its emoji or color, or delete it — starter collections included."
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant

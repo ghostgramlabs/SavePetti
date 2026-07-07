@@ -94,12 +94,9 @@ class SettingsViewModel @Inject constructor(
         }
 
     /**
-     * Update an existing user-created collection. Built-in collections
-     * are intentionally locked here so the Settings flow can't bypass
-     * the same guard the Browse flow already enforces in
-     * [CategoriesViewModel.updateSelectedCategory]. Silently no-ops on
-     * built-ins rather than throwing — the calling UI should already
-     * prevent the user from reaching this for non-user-created rows.
+     * Update a collection — starter or user-created; starters became
+     * fully editable once seeding moved to once-per-install (re-seeding
+     * no longer clobbers edits).
      */
     fun updateCollection(
         category: CategoryEntity,
@@ -108,7 +105,7 @@ class SettingsViewModel @Inject constructor(
         colorHex: Long,
         onDone: ((CategoryEntity) -> Unit)? = null
     ) = viewModelScope.launch {
-        if (!category.userCreated || name.isBlank()) return@launch
+        if (name.isBlank()) return@launch
         val updated = category.copy(
             name = name.trim().take(28),
             emoji = emoji,
@@ -119,13 +116,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Delete a user-created collection. Saves inside it stay in the
-     * library (their category_id becomes null) — same behaviour as the
-     * Browse-side delete dialog.
+     * Delete any collection, starter or user-created. Saves inside it
+     * stay in the library (their category_id becomes null) — same
+     * behaviour as the Browse-side delete dialog. Deleted starters stay
+     * gone because seeding runs once per install.
      */
     fun deleteCollection(category: CategoryEntity, onDone: (() -> Unit)? = null) =
         viewModelScope.launch {
-            if (!category.userCreated) return@launch
             repo.deleteCategory(category.id)
             onDone?.invoke()
         }

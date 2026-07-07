@@ -192,10 +192,11 @@ class CategoriesViewModel @Inject constructor(
         _sort.value = sort
     }
 
+    // Starter and user-created collections are equally editable/deletable
+    // (saves survive a delete — their category_id just becomes null).
+    // Deleted starters stay gone because seeding runs once per install.
     fun deleteSelectedCategory() = viewModelScope.launch {
         val dest = _destination.value as? BrowseDestination.Category ?: return@launch
-        val category = state.value.categories.firstOrNull { it.id == dest.id } ?: return@launch
-        if (!category.userCreated) return@launch
         repo.deleteCategory(dest.id)
         _destination.value = BrowseDestination.Grid
     }
@@ -203,7 +204,7 @@ class CategoriesViewModel @Inject constructor(
     fun updateSelectedCategory(name: String, emoji: String, colorHex: Long) = viewModelScope.launch {
         val dest = _destination.value as? BrowseDestination.Category ?: return@launch
         val category = state.value.categories.firstOrNull { it.id == dest.id } ?: return@launch
-        if (!category.userCreated || name.isBlank()) return@launch
+        if (name.isBlank()) return@launch
         repo.upsertCategory(
             category.copy(
                 name = name.trim().take(28),

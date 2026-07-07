@@ -110,7 +110,7 @@ fun CategoriesScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (showDeleteCategory && selectedCategory?.userCreated == true) {
+    if (showDeleteCategory && selectedCategory != null) {
         AlertDialog(
             onDismissRequest = { showDeleteCategory = false },
             title = { Text("Delete ${selectedCategory.name}?") },
@@ -128,7 +128,7 @@ fun CategoriesScreen(
         )
     }
 
-    if (showEditCategory && selectedCategory?.userCreated == true) {
+    if (showEditCategory && selectedCategory != null) {
         EditCollectionDialog(
             category = selectedCategory,
             onDismiss = { showEditCategory = false },
@@ -669,17 +669,15 @@ private fun DrillView(
                                 else MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    if (selectedCategory?.userCreated == true) {
-                        IconButton(onClick = onEditCategory) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Edit collection")
-                        }
-                        IconButton(onClick = onDeleteCategory) {
-                            Icon(
-                                Icons.Rounded.Delete,
-                                contentDescription = "Delete collection",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
+                    IconButton(onClick = onEditCategory) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit collection")
+                    }
+                    IconButton(onClick = onDeleteCategory) {
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Delete collection",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }

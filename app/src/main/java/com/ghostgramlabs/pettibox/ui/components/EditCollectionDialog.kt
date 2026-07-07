@@ -47,11 +47,9 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
  * because both Browse and Settings open it — duplicating it would mean the
  * rename / emoji / color UX drifts between the two surfaces.
  *
- * Built-in (non-user-created) collections render in a locked, read-only
- * variant: name field is disabled, emoji / color rows aren't shown, and
- * the Save / Delete actions are hidden. A short explanation tells the
- * user why. This is preferable to making the sheet a different shape
- * for built-ins — same mental model, gated affordances.
+ * Starter collections are just as editable as user-created ones: seeding
+ * runs once per install, so renames/deletes stick instead of being
+ * re-asserted on the next launch.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +62,6 @@ fun EditCollectionDialog(
     var name by remember(category.id) { mutableStateOf(category.name) }
     var emoji by remember(category.id) { mutableStateOf(category.emoji) }
     var color by remember(category.id) { mutableStateOf(Color(category.colorHex)) }
-    val editable = category.userCreated
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -82,67 +79,56 @@ fun EditCollectionDialog(
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
-                if (editable) "Edit collection" else "Built-in collection",
+                "Edit collection",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(12.dp))
-            if (!editable) {
-                Text(
-                    "Built-in collections can't be renamed or removed — only ones you create can be edited.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(14.dp))
-            }
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it.take(28) },
                 placeholder = { Text("Collection name") },
                 singleLine = true,
-                enabled = editable,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             )
-            if (editable) {
-                Spacer(Modifier.height(16.dp))
-                Text("Emoji", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(CollectionEmojiSeeds) { e ->
-                        Box(
-                            Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (e == emoji) color.copy(alpha = 0.18f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                .clickable { emoji = e },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(e, style = MaterialTheme.typography.titleMedium)
-                        }
+            Spacer(Modifier.height(16.dp))
+            Text("Emoji", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(CollectionEmojiSeeds) { e ->
+                    Box(
+                        Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (e == emoji) color.copy(alpha = 0.18f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            .clickable { emoji = e },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(e, style = MaterialTheme.typography.titleMedium)
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("Color", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(CollectionColorSeeds) { c ->
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(c)
-                                .border(
-                                    width = if (c == color) 3.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    shape = RoundedCornerShape(14.dp)
-                                )
-                                .clickable { color = c }
-                        )
-                    }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Color", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(CollectionColorSeeds) { c ->
+                    Box(
+                        Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(c)
+                            .border(
+                                width = if (c == color) 3.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable { color = c }
+                    )
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -150,27 +136,25 @@ fun EditCollectionDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (editable && onDelete != null) {
+                if (onDelete != null) {
                     TextButton(onClick = onDelete) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onDismiss) {
-                    Text(if (editable) "Cancel" else "Done")
+                    Text("Cancel")
                 }
-                if (editable) {
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        enabled = name.isNotBlank(),
-                        onClick = { onSave(name, emoji, color.toLongHex()) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = color,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("Save", fontWeight = FontWeight.Bold) }
-                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = name.isNotBlank(),
+                    onClick = { onSave(name, emoji, color.toLongHex()) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = color,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Save", fontWeight = FontWeight.Bold) }
             }
         }
     }
