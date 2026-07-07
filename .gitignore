@@ -32,6 +32,9 @@ local.properties
 ## OS
 Thumbs.db
 
+## Stray build/tool logs
+*.log
+
 ## Claude Code per-project local settings
 .claude/settings.local.json
 
