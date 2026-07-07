@@ -1,41 +1,41 @@
 APP NAME
-PettiBox: Save & Find
+PettiBox: Bookmark Manager
 
 SHORT DESCRIPTION
-Save links, screenshots, PDFs and notes offline. Search text inside images.
+Save links, screenshots and PDFs. Find anything with private offline search.
 
 FULL DESCRIPTION
-PettiBox is a private, offline-first shelf for everything you want to save now and find later.
+Save links, screenshots, PDFs and notes in one private bookmark manager. PettiBox makes anything you save easy to organize and find later—even offline.
 
-Use the Android share menu to save links, screenshots, notes, images, PDFs, documents and files from the apps you already use. PettiBox keeps them organized in one calm place, so useful things do not get lost in bookmarks, chats, downloads or gallery screenshots.
+Use the Android share menu to send content to PettiBox from the apps you already use. Keep articles, videos, recipes, study material, shopping ideas and documents out of scattered chats, browser bookmarks, downloads and gallery screenshots.
 
-Save from any app
+SAVE FOR LATER FROM ANY APP
 
-Share into PettiBox from Chrome, YouTube, Instagram, Reddit, WhatsApp, TikTok, X, Gallery, Files and other apps that support Android sharing. You can also add a quick note, paste a link, pick images or save a document directly from PettiBox.
+Share a link, image, screenshot, PDF or file from any Android app that supports sharing. You can also paste a link, write a quick note or select files directly in PettiBox.
 
-Find saved content fast
+FIND SAVED CONTENT FAST
 
-Search titles, notes, links, tags, sources and text found inside images or PDFs. PettiBox uses on-device text recognition to index screenshots and documents for offline search. OCR works best with clear English text and can be rescanned from Settings when needed.
+Search titles, notes, links, sources, collections and tags. On-device OCR also makes text inside screenshots, images and PDFs searchable. Search works offline, and OCR scans can be refreshed from Settings.
 
-Organize your digital life
+ORGANIZE BOOKMARKS YOUR WAY
 
-Create collections for recipes, study notes, work links, shopping ideas, travel plans, inspiration, documents and personal memories. Add tags, mark favorites, pin important saves, archive old items and move saves between collections without clutter.
+Group saved content into collections for recipes, study, work, shopping, travel or anything else. Add tags, pin important items, mark favorites and archive what you no longer need.
 
-Built for everyday saving
+MORE THAN A LINK SAVER
 
-PettiBox supports links, notes, text, images, screenshots, PDFs and general files. Link previews and YouTube thumbnails make saved links easier to recognize. Multiple image or file attachments can stay together as one save, so related material remains easy to browse.
+Keep links, notes, text, screenshots, images, PDFs, documents and other files together. Link previews make bookmarks easy to recognize, and multiple attachments can stay together in a single saved item.
 
-Reminders when you need them
+REMINDERS FOR SAVED ITEMS
 
-Add a reminder while saving or later from an item. PettiBox can nudge you about a recipe to cook, a document to review, a video to watch, a shopping idea to revisit or anything else you saved for later.
+Add a reminder when you save something or schedule one later. Remember to read an article, watch a video, review a document or revisit a shopping idea.
 
-Private by design
+PRIVATE AND OFFLINE-FIRST
 
-Your saves stay on your device. PettiBox does not require an account, subscription or cloud sync for its core features. Internet access is only used for optional link previews and remote thumbnail loading; saving, organizing, OCR search and browsing are built around local storage.
+Your library stays on your device. No account or cloud sync is required for core features. PettiBox only uses internet access for optional link previews and remote thumbnails.
 
-Backup and restore
+BACKUP AND RESTORE
 
-Export a PettiBox backup whenever you want. Backups can include your saved items, collections, tags, notes, favorites, archived items and attachments, so you stay in control of your own library.
+Export a local backup containing saved items, collections, tags, notes, favorites, archived items and attachments. Restore it when you need it.
 
 Great for saving:
 
@@ -49,9 +49,7 @@ Screenshots with important text
 PDFs, files and reference material
 Personal memories and inspiration
 
-PettiBox helps you collect the useful pieces of your digital life, keep them private, and find them again with fast offline search.
-
-Save now. Find later. Stay organized.
+PettiBox is a private bookmark manager, link saver and screenshot organizer built to help you save now and find later.
 
 PROMO TEXT OPTION 1
 Save anything from any app and find it later with offline OCR search.

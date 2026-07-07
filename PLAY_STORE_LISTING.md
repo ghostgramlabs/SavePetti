@@ -4,19 +4,20 @@ This listing was prepared from the current app implementation and Google Play me
 
 ## ASO Focus
 
-Primary keyword theme: save and find saved content
+Primary keyword theme: bookmark manager and link saver
 
 Secondary keywords:
-- bookmark manager
+- read it later
+- Pocket alternative (full description only — never in title or short description)
+- save for later
 - screenshot search
 - OCR search
-- offline notes
+- offline bookmark manager
 - PDF search
 - link saver
-- file organizer
 - save from share menu
 - collections and tags
-- backup and restore
+- private bookmarks
 
 Recommended category: Productivity
 
@@ -29,49 +30,53 @@ Recommended tags to consider in Play Console:
 
 ## App Name
 
-PettiBox: Save & Find
+PettiBox: Bookmark Manager
 
-Character count: 21 / 30
+Character count: 26 / 30
 
 ## Short Description
 
-Save links, screenshots, PDFs and notes offline. Search text inside images.
+Save links, screenshots and PDFs to read later. Private offline OCR search.
 
-Character count: 75 / 80
+Character count: 76 / 80
 
 ## Full Description
 
-PettiBox is a private, offline-first shelf for everything you want to save now and find later.
+Save links, screenshots, PDFs and notes in one private bookmark manager. PettiBox makes anything you save easy to organize and find later—even offline.
 
-Use the Android share menu to save links, screenshots, notes, images, PDFs, documents and files from the apps you already use. PettiBox keeps them organized in one calm place, so useful things do not get lost in bookmarks, chats, downloads or gallery screenshots.
+Use the Android share menu to send content to PettiBox from the apps you already use. Keep articles, videos, recipes, study material, shopping ideas and documents out of scattered chats, browser bookmarks, downloads and gallery screenshots.
 
-Save from any app
+SAVE FOR LATER FROM ANY APP
 
-Share into PettiBox from Chrome, YouTube, Instagram, Reddit, WhatsApp, TikTok, X, Gallery, Files and other apps that support Android sharing. You can also add a quick note, paste a link, pick images or save a document directly from PettiBox.
+Share a link, image, screenshot, PDF or file from any Android app that supports sharing. You can also paste a link, write a quick note or select files directly in PettiBox.
 
-Find saved content fast
+FIND SAVED CONTENT FAST
 
-Search titles, notes, links, tags, sources and text found inside images or PDFs. PettiBox uses on-device text recognition to index screenshots and documents for offline search. OCR works best with clear English text and can be rescanned from Settings when needed.
+Search titles, notes, links, sources, collections and tags. On-device OCR also makes text inside screenshots, images and PDFs searchable. Search works offline, and OCR scans can be refreshed from Settings.
 
-Organize your digital life
+ORGANIZE BOOKMARKS YOUR WAY
 
-Create collections for recipes, study notes, work links, shopping ideas, travel plans, inspiration, documents and personal memories. Add tags, mark favorites, pin important saves, archive old items and move saves between collections without clutter.
+Group saved content into collections for recipes, study, work, shopping, travel or anything else. Add tags, pin important items, mark favorites and archive what you no longer need.
 
-Built for everyday saving
+MORE THAN A LINK SAVER
 
-PettiBox supports links, notes, text, images, screenshots, PDFs and general files. Link previews and YouTube thumbnails make saved links easier to recognize. Multiple image or file attachments can stay together as one save, so related material remains easy to browse.
+Keep links, notes, text, screenshots, images, PDFs, documents and other files together. Link previews make bookmarks easy to recognize, and multiple attachments can stay together in a single saved item.
 
-Reminders when you need them
+A READ IT LATER APP THAT CANNOT LOSE YOUR LIBRARY
 
-Add a reminder while saving or later from an item. PettiBox can nudge you about a recipe to cook, a document to review, a video to watch, a shopping idea to revisit or anything else you saved for later.
+Looking for a Pocket alternative? PettiBox keeps your read-later library on your own device, so no service shutdown, account change or sync outage can take it away. Save articles and videos now, read or watch them later, and keep everything searchable offline.
 
-Private by design
+REMINDERS FOR SAVED ITEMS
 
-Your saves stay on your device. PettiBox does not require an account, subscription or cloud sync for its core features. Internet access is only used for optional link previews and remote thumbnail loading; saving, organizing, OCR search and browsing are built around local storage.
+Add a reminder when you save something or schedule one later. Remember to read an article, watch a video, review a document or revisit a shopping idea.
 
-Backup and restore
+PRIVATE AND OFFLINE-FIRST
 
-Export a PettiBox backup whenever you want. Backups can include your saved items, collections, tags, notes, favorites, archived items and attachments, so you stay in control of your own library.
+Your library stays on your device. No account or cloud sync is required for core features. PettiBox only uses internet access for optional link previews and remote thumbnails.
+
+BACKUP AND RESTORE
+
+Export a local backup containing saved items, collections, tags, notes, favorites, archived items and attachments. Restore it when you need it.
 
 Great for saving:
 
@@ -85,11 +90,32 @@ Great for saving:
 - PDFs, files and reference material
 - Personal memories and inspiration
 
-PettiBox helps you collect the useful pieces of your digital life, keep them private, and find them again with fast offline search.
+PettiBox is a private bookmark manager, read it later app, link saver and screenshot organizer built to help you save now and find later.
 
-Save now. Find later. Stay organized.
+Character count: 2571 / 4000
 
-Character count: 2709 / 4000
+## ASO Diagnosis And Launch Plan
+
+The live listing currently has 50+ downloads, no visible rating, and unrelated apps in
+the Similar apps section. That suggests Google Play has weak behavioral data and an
+unclear category signal for PettiBox. The old title, "Save & Find," does not contain a
+recognized category term.
+
+After publishing the revised metadata:
+
+1. Keep the title stable for at least four weeks so Google can learn the new positioning.
+2. In Play Console, open Grow users > Store performance > Conversion analysis. Split
+   Google Play search from Explore and review results by country and language.
+3. Check the Search terms report weekly. Build the next wording test from actual queries,
+   not a generic keyword list.
+4. Run a Store listing experiment on the short description or first screenshot, one
+   variable at a time. Do not test the title, short description and artwork together.
+5. Make screenshot 1 communicate the complete promise: "Save anything. Find it offline."
+   Screenshot 2 should prove sharing; screenshot 3 should prove OCR search.
+6. Localize the listing and screenshot text for each market the app actively supports.
+7. Drive a small amount of qualified external traffic to the Play URL with UTM-tagged
+   links. ASO improves ranking and conversion, but a new app still needs real installs,
+   retention and ratings to develop ranking signals.
 
 ## Feature Bullets
 
@@ -125,6 +151,7 @@ One private shelf for links, screenshots, notes, PDFs and files.
 
 - Do not say the app never uses internet. The app declares INTERNET for link metadata and remote preview images.
 - Do not imply official integrations with Instagram, Reddit, YouTube, WhatsApp, TikTok, X or other brands. PettiBox accepts shared content from apps that support Android sharing.
+- Pocket may be named in the full description only, and only as a comparison ("Pocket alternative"). Never put a competitor brand in the app title, short description or screenshots — that violates Play metadata policy.
 - Do not promise perfect OCR for every language or every PDF. The current in-app wording says English works best and other languages may be partial.
 - Do not mention subscriptions or ads unless the release build and store setup confirm the final monetization state.
 
