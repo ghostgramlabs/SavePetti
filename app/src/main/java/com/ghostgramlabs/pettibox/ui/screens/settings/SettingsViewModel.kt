@@ -55,6 +55,8 @@ class SettingsViewModel @Inject constructor(
     val eveningReminderTime: Flow<ReminderTime> = reminderPreferences.eveningTime
     /** Live category list — drives both the count label and conflict checks. */
     val collections: Flow<List<CategoryEntity>> = repo.observeCategories()
+    /** Live save count — gates the "restore on top of existing saves?" confirmation. */
+    val totalSaves: Flow<Int> = repo.observeTotal()
 
     fun hasExactAlarmPermission(): Boolean = ReminderScheduler.hasExactAlarmPermission(appContext)
 

@@ -135,6 +135,7 @@ fun SettingsScreen(
         )
     )
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
+    val totalSaves by viewModel.totalSaves.collectAsStateWithLifecycle(initialValue = 0)
     val morningReminderTime by viewModel.morningReminderTime
         .collectAsStateWithLifecycle(initialValue = ReminderTime(9, 0))
     val eveningReminderTime by viewModel.eveningReminderTime
@@ -283,28 +284,58 @@ fun SettingsScreen(
             onDismiss = { showCreateCollection = false }
         )
     }
+    // Restores are additive — running one on top of an existing shelf can
+    // duplicate saves. Both restore paths funnel through this gate: empty
+    // shelf restores immediately (the new-phone case), a non-empty shelf
+    // asks first.
+    var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
+
+    val runFileRestore: (Uri) -> Unit = { uri ->
+        scope.launch {
+            busyLabel = "Importing backup"
+            runCatching { viewModel.importBackupUri(uri) }
+                .onSuccess { result ->
+                    snackbarHostState.showSnackbar(
+                        "Restored ${result.saves} saves, ${result.categories} collections, ${result.tags} tags"
+                    )
+                }
+                .onFailure {
+                    snackbarHostState.showSnackbar("That backup file couldn't be imported")
+                }
+            busyLabel = null
+        }
+    }
+
     val importBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
-                busyLabel = "Importing backup"
-                runCatching { viewModel.importBackupUri(uri) }
-                    .onSuccess { result ->
-                        snackbarHostState.showSnackbar(
-                            "Restored ${result.saves} saves, ${result.categories} collections, ${result.tags} tags"
-                        )
-                    }
-                    .onFailure {
-                        snackbarHostState.showSnackbar("That backup file couldn't be imported")
-                    }
-                busyLabel = null
+            if (totalSaves > 0) {
+                pendingRestore = PendingRestore.FromFile(uri)
+            } else {
+                runFileRestore(uri)
             }
         }
     }
 
     // ── Google Drive: connect, upload-now, restore ────────────────────────
     var driveRestoreChoices by remember { mutableStateOf<List<DriveBackupFile>?>(null) }
+
+    val runDriveRestore: (DriveBackupFile) -> Unit = { backup ->
+        scope.launch {
+            busyLabel = "Restoring from Google Drive"
+            runCatching { viewModel.restoreFromDrive(backup.id) }
+                .onSuccess { result ->
+                    snackbarHostState.showSnackbar(
+                        "Restored ${result.saves} saves, ${result.categories} collections, ${result.tags} tags"
+                    )
+                }
+                .onFailure {
+                    snackbarHostState.showSnackbar("Couldn't restore that backup — try again")
+                }
+            busyLabel = null
+        }
+    }
 
     val uploadToDriveNow: suspend () -> Unit = {
         busyLabel = "Backing up"
@@ -415,6 +446,33 @@ fun SettingsScreen(
         )
     }
 
+    pendingRestore?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingRestore = null },
+            title = { Text("Restore on top of your shelf?") },
+            text = {
+                Text(
+                    "You already have $totalSaves saves. Restoring adds everything from the backup alongside them — " +
+                        "if you've restored this backup before, that means duplicates. " +
+                        "Restore is meant for a new phone or recovering lost saves."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestore = null
+                    when (pending) {
+                        is PendingRestore.FromFile -> runFileRestore(pending.uri)
+                        is PendingRestore.FromDrive -> runDriveRestore(pending.backup)
+                    }
+                }) { Text("Restore anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestore = null }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
     driveRestoreChoices?.let { backups ->
         AlertDialog(
             onDismissRequest = { driveRestoreChoices = null },
@@ -434,18 +492,10 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable {
                                     driveRestoreChoices = null
-                                    scope.launch {
-                                        busyLabel = "Restoring from Google Drive"
-                                        runCatching { viewModel.restoreFromDrive(backup.id) }
-                                            .onSuccess { result ->
-                                                snackbarHostState.showSnackbar(
-                                                    "Restored ${result.saves} saves, ${result.categories} collections, ${result.tags} tags"
-                                                )
-                                            }
-                                            .onFailure {
-                                                snackbarHostState.showSnackbar("Couldn't restore that backup — try again")
-                                            }
-                                        busyLabel = null
+                                    if (totalSaves > 0) {
+                                        pendingRestore = PendingRestore.FromDrive(backup)
+                                    } else {
+                                        runDriveRestore(backup)
                                     }
                                 }
                                 .padding(horizontal = 8.dp, vertical = 10.dp)
@@ -1702,6 +1752,12 @@ private fun ThemeChoice(
             Text(mode.label(), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
         }
     }
+}
+
+/** A restore the user picked but hasn't confirmed yet (shelf wasn't empty). */
+private sealed interface PendingRestore {
+    data class FromFile(val uri: Uri) : PendingRestore
+    data class FromDrive(val backup: DriveBackupFile) : PendingRestore
 }
 
 private fun shareBackupFile(ctx: Context, file: File): Boolean =
