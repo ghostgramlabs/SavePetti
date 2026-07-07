@@ -1,10 +1,12 @@
 package com.ghostgramlabs.pettibox.ui.screens.settings
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +32,9 @@ import androidx.compose.material.icons.automirrored.rounded.TextSnippet
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
@@ -75,7 +80,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ghostgramlabs.pettibox.data.drive.DriveBackupFile
+import com.ghostgramlabs.pettibox.data.drive.DriveBackupManager
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
+import com.ghostgramlabs.pettibox.data.preferences.DriveBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ReminderTime
@@ -116,6 +124,15 @@ fun SettingsScreen(
             lastBackupName = "",
             folderUri = "",
             lastCopyFailedAt = 0L
+        )
+    )
+    val driveBackupStatus by viewModel.driveBackupStatus.collectAsStateWithLifecycle(
+        initialValue = DriveBackupStatus(
+            enabled = false,
+            lastBackupAt = 0L,
+            lastBackupName = "",
+            needsReconnectAt = 0L,
+            lastFailedAt = 0L
         )
     )
     val collections by viewModel.collections.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -250,6 +267,120 @@ fun SettingsScreen(
             }
         }
     }
+    // ── Google Drive: connect, upload-now, restore ────────────────────────
+    var driveRestoreChoices by remember { mutableStateOf<List<DriveBackupFile>?>(null) }
+
+    val uploadToDriveNow: suspend () -> Unit = {
+        busyLabel = "Backing up to Google Drive"
+        val outcome = runCatching { viewModel.backupToDriveNow() }
+            .getOrElse { DriveBackupManager.UploadOutcome.Failed(it) }
+        when (outcome) {
+            is DriveBackupManager.UploadOutcome.Uploaded ->
+                snackbarHostState.showSnackbar("Backup uploaded to your Google Drive")
+            DriveBackupManager.UploadOutcome.NeedsReconnect ->
+                snackbarHostState.showSnackbar("Google Drive needs reconnecting — tap Connect again")
+            is DriveBackupManager.UploadOutcome.Failed ->
+                snackbarHostState.showSnackbar("Couldn't upload to Drive — check your connection and try again")
+        }
+        busyLabel = null
+    }
+
+    val driveConsent = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        scope.launch {
+            if (result.resultCode == Activity.RESULT_OK && viewModel.completeDriveConnect(result.data)) {
+                snackbarHostState.showSnackbar("Google Drive connected")
+                uploadToDriveNow()
+            } else {
+                snackbarHostState.showSnackbar("Google Drive connection was cancelled")
+            }
+        }
+    }
+
+    val connectDrive: () -> Unit = {
+        scope.launch {
+            busyLabel = "Connecting Google Drive"
+            runCatching { viewModel.beginDriveConnect() }
+                .onSuccess { step ->
+                    busyLabel = null
+                    when (step) {
+                        SettingsViewModel.DriveConnectStep.Connected -> {
+                            snackbarHostState.showSnackbar("Google Drive connected")
+                            uploadToDriveNow()
+                        }
+                        is SettingsViewModel.DriveConnectStep.NeedsConsent ->
+                            driveConsent.launch(
+                                IntentSenderRequest.Builder(step.pendingIntent.intentSender).build()
+                            )
+                    }
+                }
+                .onFailure {
+                    busyLabel = null
+                    snackbarHostState.showSnackbar(
+                        "Couldn't reach Google Play services — is this device signed in to Google?"
+                    )
+                }
+        }
+    }
+
+    driveRestoreChoices?.let { backups ->
+        AlertDialog(
+            onDismissRequest = { driveRestoreChoices = null },
+            title = { Text("Restore from Google Drive") },
+            text = {
+                Column {
+                    Text(
+                        "Pick a backup to bring onto this device. Your current saves stay — the backup's items are added alongside them.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    backups.take(5).forEach { backup ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    driveRestoreChoices = null
+                                    scope.launch {
+                                        busyLabel = "Restoring from Google Drive"
+                                        runCatching { viewModel.restoreFromDrive(backup.id) }
+                                            .onSuccess { result ->
+                                                snackbarHostState.showSnackbar(
+                                                    "Restored ${result.saves} saves, ${result.categories} collections, ${result.tags} tags"
+                                                )
+                                            }
+                                            .onFailure {
+                                                snackbarHostState.showSnackbar("Couldn't restore that backup — try again")
+                                            }
+                                        busyLabel = null
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                backup.name,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                formatBackupTime(backup.createdAtMillis),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { driveRestoreChoices = null }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
     val importBookmarks = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -602,6 +733,11 @@ fun SettingsScreen(
                     body = "Coming from Chrome, Firefox, Raindrop.io, or Pocket? Export your bookmarks there (HTML or CSV), then use \"Import bookmarks file\" below. Folders and tags carry over.",
                     icon = Icons.Rounded.FolderOpen
                 )
+                HelpItem(
+                    title = "Back up to your Google Drive",
+                    body = "Connect Google Drive in the Backup section and every nightly safety copy also uploads to a \"PettiBox Backups\" folder in your own Drive. PettiBox can only see files it created — never the rest of your Drive.",
+                    icon = Icons.Rounded.Cloud
+                )
                 }
             }
 
@@ -695,6 +831,116 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.Cloud,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Google Drive",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            when {
+                                !driveBackupStatus.enabled ->
+                                    "Keep your nightly safety copy in your own Google Drive too."
+                                driveBackupStatus.lastBackupAt > 0L ->
+                                    "Connected. Last upload: ${formatBackupTime(driveBackupStatus.lastBackupAt)}."
+                                else ->
+                                    "Connected. Your shelf uploads with tonight's safety copy."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (driveBackupStatus.enabled && driveBackupStatus.needsReconnectAt > 0L) {
+                    Spacer(Modifier.height(10.dp))
+                    NoticeBanner(
+                        text = "PettiBox lost access to your Google Drive, so cloud copies are paused. Reconnect to resume them.",
+                        action = "Reconnect",
+                        onAction = connectDrive,
+                        pose = KeeperPose.BackupWarning,
+                        isError = true
+                    )
+                } else if (driveBackupStatus.enabled && driveBackupStatus.lastFailedAt > 0L) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Last Drive upload didn't finish — maybe offline. It retries with tonight's safety copy.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                if (!driveBackupStatus.enabled) {
+                    OutlinedButton(
+                        onClick = connectDrive,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Connect Google Drive", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { scope.launch { uploadToDriveNow() } },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Back up to Drive now", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                busyLabel = "Checking Google Drive"
+                                val backups = runCatching { viewModel.listDriveBackups() }.getOrNull()
+                                busyLabel = null
+                                when {
+                                    backups == null -> snackbarHostState.showSnackbar(
+                                        "Couldn't reach Google Drive — reconnect and try again"
+                                    )
+                                    backups.isEmpty() -> snackbarHostState.showSnackbar(
+                                        "No Drive backups yet — tap \"Back up to Drive now\" first"
+                                    )
+                                    else -> driveRestoreChoices = backups
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Restore from Drive", fontWeight = FontWeight.Bold)
+                    }
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                viewModel.disconnectDrive()
+                                snackbarHostState.showSnackbar(
+                                    "Google Drive disconnected. Copies already uploaded stay in your Drive."
+                                )
+                            }
+                        }
+                    ) {
+                        Text("Disconnect Google Drive")
+                    }
+                }
+
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {

@@ -22,6 +22,16 @@ data class LocalBackupStatus(
     val lastCopyFailedAt: Long
 )
 
+data class DriveBackupStatus(
+    val enabled: Boolean,
+    val lastBackupAt: Long,
+    val lastBackupName: String,
+    /** Set when a background upload found consent revoked/expired — the user must reconnect. */
+    val needsReconnectAt: Long,
+    /** Set when the last upload failed for a transient reason (offline, Drive error). */
+    val lastFailedAt: Long
+)
+
 @Singleton
 class BackupPreferences @Inject constructor(
     @ApplicationContext private val context: Context
@@ -75,6 +85,53 @@ class BackupPreferences @Inject constructor(
     suspend fun clearCopyFailure() {
         context.backupDataStore.edit { prefs ->
             prefs.remove(lastCopyFailedAtKey)
+        }
+    }
+
+    // ── Google Drive backup ───────────────────────────────────────────────
+
+    private val driveEnabledKey = booleanPreferencesKey("drive_backup_enabled")
+    private val lastDriveBackupAtKey = longPreferencesKey("last_drive_backup_at")
+    private val lastDriveBackupNameKey = stringPreferencesKey("last_drive_backup_name")
+    private val driveNeedsReconnectAtKey = longPreferencesKey("drive_needs_reconnect_at")
+    private val lastDriveFailedAtKey = longPreferencesKey("last_drive_backup_failed_at")
+
+    val driveStatus: Flow<DriveBackupStatus> = context.backupDataStore.data.map { prefs ->
+        DriveBackupStatus(
+            enabled = prefs[driveEnabledKey] ?: false,
+            lastBackupAt = prefs[lastDriveBackupAtKey] ?: 0L,
+            lastBackupName = prefs[lastDriveBackupNameKey].orEmpty(),
+            needsReconnectAt = prefs[driveNeedsReconnectAtKey] ?: 0L,
+            lastFailedAt = prefs[lastDriveFailedAtKey] ?: 0L
+        )
+    }
+
+    suspend fun setDriveBackupEnabled(enabled: Boolean) {
+        context.backupDataStore.edit { prefs ->
+            prefs[driveEnabledKey] = enabled
+            prefs.remove(driveNeedsReconnectAtKey)
+            prefs.remove(lastDriveFailedAtKey)
+        }
+    }
+
+    suspend fun recordDriveBackup(fileName: String, timestamp: Long = System.currentTimeMillis()) {
+        context.backupDataStore.edit { prefs ->
+            prefs[lastDriveBackupAtKey] = timestamp
+            prefs[lastDriveBackupNameKey] = fileName
+            prefs.remove(driveNeedsReconnectAtKey)
+            prefs.remove(lastDriveFailedAtKey)
+        }
+    }
+
+    suspend fun recordDriveNeedsReconnect(timestamp: Long = System.currentTimeMillis()) {
+        context.backupDataStore.edit { prefs ->
+            prefs[driveNeedsReconnectAtKey] = timestamp
+        }
+    }
+
+    suspend fun recordDriveFailure(timestamp: Long = System.currentTimeMillis()) {
+        context.backupDataStore.edit { prefs ->
+            prefs[lastDriveFailedAtKey] = timestamp
         }
     }
 }

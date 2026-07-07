@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.ghostgramlabs.pettibox.data.drive.DriveBackupManager
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
@@ -24,7 +25,8 @@ class LocalBackupWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val repository: SaveRepository,
     private val backupStore: LocalBackupStore,
-    private val backupPreferences: BackupPreferences
+    private val backupPreferences: BackupPreferences,
+    private val driveBackupManager: DriveBackupManager
 ) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result =
@@ -43,6 +45,11 @@ class LocalBackupWorker @AssistedInject constructor(
                 if (copied) backupPreferences.clearCopyFailure()
                 else backupPreferences.recordCopyFailure()
             }
+            // Google Drive upload, when the user connected it. Outcomes are
+            // recorded to preferences inside the manager (Settings surfaces
+            // them); a Drive hiccup must never fail the local backup, so
+            // nothing here throws past this call.
+            driveBackupManager.uploadIfEnabled(file)
             backupStore.pruneOldBackups()
             backupPreferences.recordLocalBackup(file.name, file.lastModified())
             Result.success()

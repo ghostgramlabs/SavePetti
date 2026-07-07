@@ -127,6 +127,11 @@ dependencies {
 
     implementation("com.google.mlkit:text-recognition:16.0.1")
 
+    // Google Drive backup: AuthorizationClient (drive.file consent + tokens).
+    // Drive REST calls are plain HttpURLConnection — no Drive SDK needed.
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
     implementation("org.jsoup:jsoup:1.18.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

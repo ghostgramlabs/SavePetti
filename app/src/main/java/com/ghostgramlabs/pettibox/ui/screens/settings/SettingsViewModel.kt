@@ -5,12 +5,17 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.PendingIntent
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
 import com.ghostgramlabs.pettibox.data.bookmarks.BookmarkFileParser
+import com.ghostgramlabs.pettibox.data.drive.DriveAuth
+import com.ghostgramlabs.pettibox.data.drive.DriveBackupFile
+import com.ghostgramlabs.pettibox.data.drive.DriveBackupManager
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorker
 import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
 import com.ghostgramlabs.pettibox.data.preferences.BackupPreferences
+import com.ghostgramlabs.pettibox.data.preferences.DriveBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.LocalBackupStatus
 import com.ghostgramlabs.pettibox.data.preferences.OcrPreferences
 import com.ghostgramlabs.pettibox.data.preferences.ReminderPreferences
@@ -37,11 +42,14 @@ class SettingsViewModel @Inject constructor(
     private val backupPreferences: BackupPreferences,
     private val reminderPreferences: ReminderPreferences,
     private val localBackupStore: LocalBackupStore,
+    private val driveAuth: DriveAuth,
+    private val driveBackupManager: DriveBackupManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     val autoScanOcr: Flow<Boolean> = ocrPreferences.autoScan
     val pdfPageLimit: Flow<Int> = ocrPreferences.pdfPageLimit
     val localBackupStatus: Flow<LocalBackupStatus> = backupPreferences.status
+    val driveBackupStatus: Flow<DriveBackupStatus> = backupPreferences.driveStatus
     /** Anchors the quick-reminder presets snap to (see ReminderPreferences). */
     val morningReminderTime: Flow<ReminderTime> = reminderPreferences.morningTime
     val eveningReminderTime: Flow<ReminderTime> = reminderPreferences.eveningTime
@@ -199,6 +207,69 @@ class SettingsViewModel @Inject constructor(
             if (bookmarks.isEmpty()) error("No links found in file")
             repo.importBookmarks(bookmarks)
         }
+
+    // ── Google Drive backup ───────────────────────────────────────────────
+
+    sealed interface DriveConnectStep {
+        /** Consent already granted (e.g. reconnect after reinstall) — Drive is live. */
+        data object Connected : DriveConnectStep
+        /** The screen must launch this to show Google's consent sheet. */
+        data class NeedsConsent(val pendingIntent: PendingIntent) : DriveConnectStep
+    }
+
+    suspend fun beginDriveConnect(): DriveConnectStep {
+        val result = driveAuth.authorize()
+        val pendingIntent = result.pendingIntent
+        return if (result.hasResolution() && pendingIntent != null) {
+            DriveConnectStep.NeedsConsent(pendingIntent)
+        } else {
+            enableDriveBackup()
+            DriveConnectStep.Connected
+        }
+    }
+
+    /** Called with the consent sheet's result intent. True when the user granted access. */
+    suspend fun completeDriveConnect(data: Intent?): Boolean =
+        runCatching {
+            com.google.android.gms.auth.api.identity.Identity
+                .getAuthorizationClient(appContext)
+                .getAuthorizationResultFromIntent(data)
+            enableDriveBackup()
+            true
+        }.getOrDefault(false)
+
+    /**
+     * Connecting Drive implies wanting automatic backups, and the Drive
+     * upload rides on the nightly local worker — so switch that on too if
+     * the user hadn't already.
+     */
+    private suspend fun enableDriveBackup() {
+        backupPreferences.setDriveBackupEnabled(true)
+        if (!backupPreferences.status.first().enabled) {
+            backupPreferences.setAutoLocalBackup(true)
+            LocalBackupWorker.schedule(appContext)
+        }
+    }
+
+    suspend fun disconnectDrive() {
+        backupPreferences.setDriveBackupEnabled(false)
+    }
+
+    /** Fresh zip → local shelf copy (usual bookkeeping) → Drive upload. */
+    suspend fun backupToDriveNow(): DriveBackupManager.UploadOutcome {
+        val (file, _) = createLocalBackupNow()
+        return driveBackupManager.upload(file)
+    }
+
+    /** Null means Drive consent lapsed and the user must reconnect. */
+    suspend fun listDriveBackups(): List<DriveBackupFile>? =
+        driveBackupManager.listBackups()
+
+    suspend fun restoreFromDrive(fileId: String): SaveRepository.BackupImportResult {
+        val stream = driveBackupManager.openBackupStream(fileId)
+            ?: error("Drive access needs reconnecting")
+        return stream.use { repo.importBackupZip(it) }
+    }
 
     private fun displayNameOf(uri: Uri): String =
         appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
