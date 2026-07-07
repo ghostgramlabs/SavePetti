@@ -50,6 +50,12 @@ class DriveBackupManager @Inject constructor(
         }.fold(
             onSuccess = { name ->
                 backupPreferences.recordDriveBackup(name)
+                // Backfill the account identity for connections made before
+                // the email was surfaced in Settings (or if the connect-time
+                // lookup failed) — the nightly run heals it.
+                if (backupPreferences.driveStatus.first().accountEmail.isBlank()) {
+                    client.accountEmail(token)?.let { backupPreferences.recordDriveAccount(it) }
+                }
                 UploadOutcome.Uploaded(name)
             },
             onFailure = { error ->
@@ -57,6 +63,12 @@ class DriveBackupManager @Inject constructor(
                 UploadOutcome.Failed(error)
             }
         )
+    }
+
+    /** Look up and persist which Google account the Drive consent belongs to. */
+    suspend fun refreshAccountEmail() {
+        val token = auth.silentAccessToken() ?: return
+        client.accountEmail(token)?.let { backupPreferences.recordDriveAccount(it) }
     }
 
     /** Backups in the Drive folder, newest first. Null when consent is needed. */

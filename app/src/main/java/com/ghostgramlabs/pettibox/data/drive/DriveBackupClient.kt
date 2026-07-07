@@ -126,6 +126,26 @@ class DriveBackupClient @Inject constructor() {
             conn.inputStream
         }
 
+    /**
+     * Email of the Google account the token belongs to, via the Drive
+     * `about` endpoint (allowed under drive.file — no extra scope). Null
+     * on any failure; identity display is best-effort, never blocking.
+     */
+    suspend fun accountEmail(token: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = readResponse(
+                open(
+                    "https://www.googleapis.com/drive/v3/about?fields=${encode("user(emailAddress)")}",
+                    "GET",
+                    token
+                )
+            )
+            JSONObject(response).optJSONObject("user")
+                ?.optString("emailAddress")
+                ?.ifBlank { null }
+        }.getOrNull()
+    }
+
     // ── Folder plumbing ───────────────────────────────────────────────────
 
     private fun findBackupFolder(token: String): String? {

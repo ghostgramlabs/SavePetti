@@ -24,6 +24,8 @@ data class LocalBackupStatus(
 
 data class DriveBackupStatus(
     val enabled: Boolean,
+    /** Google account the backups upload to — "" until the first about-lookup succeeds. */
+    val accountEmail: String,
     val lastBackupAt: Long,
     val lastBackupName: String,
     /** Set when a background upload found consent revoked/expired — the user must reconnect. */
@@ -91,6 +93,7 @@ class BackupPreferences @Inject constructor(
     // ── Google Drive backup ───────────────────────────────────────────────
 
     private val driveEnabledKey = booleanPreferencesKey("drive_backup_enabled")
+    private val driveAccountEmailKey = stringPreferencesKey("drive_account_email")
     private val lastDriveBackupAtKey = longPreferencesKey("last_drive_backup_at")
     private val lastDriveBackupNameKey = stringPreferencesKey("last_drive_backup_name")
     private val driveNeedsReconnectAtKey = longPreferencesKey("drive_needs_reconnect_at")
@@ -99,6 +102,7 @@ class BackupPreferences @Inject constructor(
     val driveStatus: Flow<DriveBackupStatus> = context.backupDataStore.data.map { prefs ->
         DriveBackupStatus(
             enabled = prefs[driveEnabledKey] ?: false,
+            accountEmail = prefs[driveAccountEmailKey].orEmpty(),
             lastBackupAt = prefs[lastDriveBackupAtKey] ?: 0L,
             lastBackupName = prefs[lastDriveBackupNameKey].orEmpty(),
             needsReconnectAt = prefs[driveNeedsReconnectAtKey] ?: 0L,
@@ -111,6 +115,13 @@ class BackupPreferences @Inject constructor(
             prefs[driveEnabledKey] = enabled
             prefs.remove(driveNeedsReconnectAtKey)
             prefs.remove(lastDriveFailedAtKey)
+            if (!enabled) prefs.remove(driveAccountEmailKey)
+        }
+    }
+
+    suspend fun recordDriveAccount(email: String) {
+        context.backupDataStore.edit { prefs ->
+            prefs[driveAccountEmailKey] = email
         }
     }
 

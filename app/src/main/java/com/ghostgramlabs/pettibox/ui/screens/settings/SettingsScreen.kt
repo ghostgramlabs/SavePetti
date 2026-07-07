@@ -33,8 +33,6 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
@@ -129,6 +127,7 @@ fun SettingsScreen(
     val driveBackupStatus by viewModel.driveBackupStatus.collectAsStateWithLifecycle(
         initialValue = DriveBackupStatus(
             enabled = false,
+            accountEmail = "",
             lastBackupAt = 0L,
             lastBackupName = "",
             needsReconnectAt = 0L,
@@ -144,6 +143,7 @@ fun SettingsScreen(
     var editingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var deletingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var showRemoveStarters by remember { mutableStateOf(false) }
+    var showRestoreChooser by remember { mutableStateOf(false) }
     var editingReminderTime by remember { mutableStateOf<ReminderTimeTarget?>(null) }
     var showHelpDetails by remember { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
@@ -302,20 +302,21 @@ fun SettingsScreen(
             }
         }
     }
+
     // ── Google Drive: connect, upload-now, restore ────────────────────────
     var driveRestoreChoices by remember { mutableStateOf<List<DriveBackupFile>?>(null) }
 
     val uploadToDriveNow: suspend () -> Unit = {
-        busyLabel = "Backing up to Google Drive"
+        busyLabel = "Backing up"
         val outcome = runCatching { viewModel.backupToDriveNow() }
             .getOrElse { DriveBackupManager.UploadOutcome.Failed(it) }
         when (outcome) {
             is DriveBackupManager.UploadOutcome.Uploaded ->
-                snackbarHostState.showSnackbar("Backup uploaded to your Google Drive")
+                snackbarHostState.showSnackbar("Backed up — copy saved on this phone and in your Google Drive")
             DriveBackupManager.UploadOutcome.NeedsReconnect ->
-                snackbarHostState.showSnackbar("Google Drive needs reconnecting — tap Connect again")
+                snackbarHostState.showSnackbar("Saved on this phone. Google Drive needs reconnecting — tap Connect again")
             is DriveBackupManager.UploadOutcome.Failed ->
-                snackbarHostState.showSnackbar("Couldn't upload to Drive — check your connection and try again")
+                snackbarHostState.showSnackbar("Saved on this phone, but the Drive upload failed — check your connection")
         }
         busyLabel = null
     }
@@ -357,6 +358,61 @@ fun SettingsScreen(
                     )
                 }
         }
+    }
+
+    val openDriveRestore: () -> Unit = {
+        scope.launch {
+            busyLabel = "Checking Google Drive"
+            val backups = runCatching { viewModel.listDriveBackups() }.getOrNull()
+            busyLabel = null
+            when {
+                backups == null -> snackbarHostState.showSnackbar(
+                    "Couldn't reach Google Drive — reconnect and try again"
+                )
+                backups.isEmpty() -> snackbarHostState.showSnackbar(
+                    "No Drive backups yet — tap \"Back up now\" first"
+                )
+                else -> driveRestoreChoices = backups
+            }
+        }
+    }
+
+    if (showRestoreChooser) {
+        AlertDialog(
+            onDismissRequest = { showRestoreChooser = false },
+            title = { Text("Restore a backup") },
+            text = {
+                Column {
+                    RestoreSourceRow(
+                        icon = Icons.Rounded.Cloud,
+                        title = "From Google Drive",
+                        caption = if (driveBackupStatus.enabled) {
+                            "Pick one of your cloud copies"
+                        } else {
+                            "Connect Google Drive first — new phone? Your copies are waiting there"
+                        },
+                        onClick = {
+                            showRestoreChooser = false
+                            if (driveBackupStatus.enabled) openDriveRestore() else connectDrive()
+                        }
+                    )
+                    RestoreSourceRow(
+                        icon = Icons.Rounded.FolderOpen,
+                        title = "From a file",
+                        caption = "Pick a PettiBox backup zip from this phone",
+                        onClick = {
+                            showRestoreChooser = false
+                            importBackup.launch(arrayOf("application/zip", "application/json", "text/*", "*/*"))
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showRestoreChooser = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 
     driveRestoreChoices?.let { backups ->
@@ -768,12 +824,12 @@ fun SettingsScreen(
                 )
                 HelpItem(
                     title = "Back up your shelf",
-                    body = "PettiBox keeps automatic copies on this device. Export makes a file you can save or share anywhere.",
+                    body = "Every backup always keeps a copy on this phone; connect Google Drive (and optionally an extra folder) to send the same copy there too. \"Back up now\" fills every destination in one tap.",
                     icon = Icons.Rounded.Download
                 )
                 HelpItem(
                     title = "Restore from a backup",
-                    body = "New phone, or need to recover? In the Backup section above, tap \"Restore from backup\" and pick a backup file to bring everything back.",
+                    body = "New phone, or need to recover? Tap \"Restore a backup\" in the Backup section and choose Google Drive or a backup file — everything comes back either way.",
                     icon = Icons.Rounded.FolderOpen
                 )
                 HelpItem(
@@ -804,15 +860,15 @@ fun SettingsScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "Automatic safety copy",
+                            "Automatic nightly backup",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             if (localBackupStatus.lastBackupAt > 0L) {
-                                "Runs overnight. Last copy: ${formatBackupTime(localBackupStatus.lastBackupAt)}."
+                                "Runs overnight. Last backup: ${formatBackupTime(localBackupStatus.lastBackupAt)}."
                             } else {
-                                "Runs overnight and keeps recent copies on this device."
+                                "Runs overnight — every place below gets a fresh copy."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -824,36 +880,80 @@ fun SettingsScreen(
                             scope.launch {
                                 viewModel.setAutoLocalBackup(enabled)
                                 snackbarHostState.showSnackbar(
-                                    if (enabled) "Automatic safety copy is on"
-                                    else "Automatic safety copy is off"
+                                    if (enabled) "Automatic nightly backup is on"
+                                    else "Automatic nightly backup is off"
                                 )
                             }
                         }
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(14.dp))
                 Text(
-                    if (localBackupStatus.folderUri.isBlank()) {
-                        "Optional: also copy each backup to a folder in Files or another app."
-                    } else {
-                        "Backups are also copied to your chosen folder."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "Where your backups go",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                if (localBackupStatus.lastCopyFailedAt > 0L) {
-                    Spacer(Modifier.height(10.dp))
+
+                BackupDestinationRow(
+                    icon = Icons.Rounded.PhoneAndroid,
+                    title = "This phone",
+                    caption = "Always included — keeps the 3 newest copies in PettiBox storage."
+                )
+                BackupDestinationRow(
+                    icon = Icons.Rounded.Cloud,
+                    title = "Google Drive",
+                    caption = when {
+                        !driveBackupStatus.enabled ->
+                            "Not connected. Cloud copies survive a lost or broken phone."
+                        driveBackupStatus.accountEmail.isNotBlank() && driveBackupStatus.lastBackupAt > 0L ->
+                            "${driveBackupStatus.accountEmail} · Last upload: ${formatBackupTime(driveBackupStatus.lastBackupAt)}"
+                        driveBackupStatus.accountEmail.isNotBlank() ->
+                            "${driveBackupStatus.accountEmail} · Uploads with tonight's backup"
+                        driveBackupStatus.lastBackupAt > 0L ->
+                            "Connected · Last upload: ${formatBackupTime(driveBackupStatus.lastBackupAt)}"
+                        else -> "Connected · Uploads with tonight's backup"
+                    },
+                    actionLabel = if (driveBackupStatus.enabled) "Disconnect" else "Connect",
+                    onAction = {
+                        if (driveBackupStatus.enabled) {
+                            scope.launch {
+                                viewModel.disconnectDrive()
+                                snackbarHostState.showSnackbar(
+                                    "Google Drive disconnected. Copies already uploaded stay in your Drive."
+                                )
+                            }
+                        } else {
+                            connectDrive()
+                        }
+                    }
+                )
+                if (driveBackupStatus.enabled && driveBackupStatus.needsReconnectAt > 0L) {
                     NoticeBanner(
-                        text = "PettiBox made a private backup, but couldn't copy it to your selected folder. Pick the folder again if it moved or permissions changed.",
-                        action = "Choose folder",
-                        onAction = { chooseBackupFolder.launch(null) },
+                        text = "PettiBox lost access to your Google Drive, so cloud copies are paused. Reconnect to resume them.",
+                        action = "Reconnect",
+                        onAction = connectDrive,
                         pose = KeeperPose.BackupWarning,
                         isError = true
                     )
+                    Spacer(Modifier.height(6.dp))
+                } else if (driveBackupStatus.enabled && driveBackupStatus.lastFailedAt > 0L) {
+                    Text(
+                        "Last Drive upload didn't finish — maybe offline. It retries with tonight's backup.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(6.dp))
                 }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = {
+                BackupDestinationRow(
+                    icon = Icons.Rounded.FolderOpen,
+                    title = "Extra folder",
+                    caption = if (localBackupStatus.folderUri.isBlank()) {
+                        "Optional — also drop each copy into a folder you pick."
+                    } else {
+                        "Each backup is also copied to your chosen folder."
+                    },
+                    actionLabel = if (localBackupStatus.folderUri.isBlank()) "Choose" else "Change",
+                    onAction = {
                         // Some OEM builds ship without a Storage Access
                         // Framework picker or block the implicit intent —
                         // OpenDocumentTree throws ActivityNotFoundException
@@ -867,154 +967,63 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                    }
+                )
+                if (localBackupStatus.lastCopyFailedAt > 0L) {
+                    NoticeBanner(
+                        text = "PettiBox made a backup, but couldn't copy it to your extra folder. Pick the folder again if it moved or permissions changed.",
+                        action = "Choose folder",
+                        onAction = { chooseBackupFolder.launch(null) },
+                        pose = KeeperPose.BackupWarning,
+                        isError = true
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        scope.launch {
+                            // One button, every destination: the zip always
+                            // lands on this phone (and the extra folder if
+                            // set); the Drive upload rides on top when
+                            // connected.
+                            if (driveBackupStatus.enabled) {
+                                uploadToDriveNow()
+                            } else {
+                                busyLabel = "Backing up"
+                                runCatching { viewModel.createLocalBackupNow() }
+                                    .onSuccess { (_, result) ->
+                                        snackbarHostState.showSnackbar(
+                                            backupSummaryMessage("Backed up on this phone:", result)
+                                        )
+                                    }
+                                    .onFailure {
+                                        snackbarHostState.showSnackbar("Couldn't make a backup")
+                                    }
+                                busyLabel = null
+                            }
+                        }
                     },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Back up now", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { showRestoreChooser = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (localBackupStatus.folderUri.isBlank()) "Choose backup folder"
-                        else "Change backup folder",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Rounded.Cloud,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "Google Drive",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            when {
-                                !driveBackupStatus.enabled ->
-                                    "Keep your nightly safety copy in your own Google Drive too."
-                                driveBackupStatus.lastBackupAt > 0L ->
-                                    "Connected. Last upload: ${formatBackupTime(driveBackupStatus.lastBackupAt)}."
-                                else ->
-                                    "Connected. Your shelf uploads with tonight's safety copy."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (driveBackupStatus.enabled && driveBackupStatus.needsReconnectAt > 0L) {
-                    Spacer(Modifier.height(10.dp))
-                    NoticeBanner(
-                        text = "PettiBox lost access to your Google Drive, so cloud copies are paused. Reconnect to resume them.",
-                        action = "Reconnect",
-                        onAction = connectDrive,
-                        pose = KeeperPose.BackupWarning,
-                        isError = true
-                    )
-                } else if (driveBackupStatus.enabled && driveBackupStatus.lastFailedAt > 0L) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Last Drive upload didn't finish — maybe offline. It retries with tonight's safety copy.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                if (!driveBackupStatus.enabled) {
-                    OutlinedButton(
-                        onClick = connectDrive,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Connect Google Drive", fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { scope.launch { uploadToDriveNow() } },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Back up to Drive now", fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                busyLabel = "Checking Google Drive"
-                                val backups = runCatching { viewModel.listDriveBackups() }.getOrNull()
-                                busyLabel = null
-                                when {
-                                    backups == null -> snackbarHostState.showSnackbar(
-                                        "Couldn't reach Google Drive — reconnect and try again"
-                                    )
-                                    backups.isEmpty() -> snackbarHostState.showSnackbar(
-                                        "No Drive backups yet — tap \"Back up to Drive now\" first"
-                                    )
-                                    else -> driveRestoreChoices = backups
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Restore from Drive", fontWeight = FontWeight.Bold)
-                    }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                viewModel.disconnectDrive()
-                                snackbarHostState.showSnackbar(
-                                    "Google Drive disconnected. Copies already uploaded stay in your Drive."
-                                )
-                            }
-                        }
-                    ) {
-                        Text("Disconnect Google Drive")
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            busyLabel = "Backing up now"
-                            runCatching { viewModel.createLocalBackupNow() }
-                                .onSuccess { (_, result) ->
-                                    snackbarHostState.showSnackbar(
-                                        backupSummaryMessage("Local backup saved", result)
-                                    )
-                                }
-                                .onFailure {
-                                    snackbarHostState.showSnackbar("Couldn't make safety copy")
-                                }
-                            busyLabel = null
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Make safety copy now", fontWeight = FontWeight.Bold)
+                    Text("Restore a backup", fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
-                Button(
+                OutlinedButton(
                     onClick = {
                         scope.launch {
                             busyLabel = "Preparing export"
@@ -1034,22 +1043,12 @@ fun SettingsScreen(
                             busyLabel = null
                         }
                     },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Export a backup file", fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = { importBackup.launch(arrayOf("application/zip", "application/json", "text/*", "*/*")) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Restore from backup", fontWeight = FontWeight.Bold)
+                    Text("Export & share a backup file", fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -1121,6 +1120,86 @@ private fun SettingsSection(
         )
         Spacer(Modifier.height(12.dp))
         content()
+    }
+}
+
+/** One "where your backups go" line: icon, name, live status, optional trailing action. */
+@Composable
+private fun BackupDestinationRow(
+    icon: ImageVector,
+    title: String,
+    caption: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) {
+                Text(actionLabel, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** Tappable source option inside the "Restore a backup" chooser dialog. */
+@Composable
+private fun RestoreSourceRow(
+    icon: ImageVector,
+    title: String,
+    caption: String,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

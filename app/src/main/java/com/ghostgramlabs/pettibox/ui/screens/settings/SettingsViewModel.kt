@@ -250,6 +250,9 @@ class SettingsViewModel @Inject constructor(
             backupPreferences.setAutoLocalBackup(true)
             LocalBackupWorker.schedule(appContext)
         }
+        // Best-effort: shows "Connected as <email>" in Settings. A failed
+        // lookup self-heals on the next successful upload.
+        driveBackupManager.refreshAccountEmail()
     }
 
     suspend fun disconnectDrive() {
