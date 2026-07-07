@@ -1,0 +1,4 @@
+id,title,note,excerpt,url,folder,tags,created,cover,highlights,favorite
+101,"Best pasta in town","try this weekend","A guide to the city's pasta places",https://food.example/pasta,Recipes,"cooking, italian",2024-11-02T18:22:10.000Z,https://food.example/cover.jpg,,true
+102,Attention Is All You Need,,"Abstract: The dominant sequence transduction models...",https://arxiv.example/1706.03762,Tech/AI,ai,2025-01-15T09:00:00.000Z,,,false
+103,Plain link,,,https://plain.example/,,,2025-02-01T00:00:00.000Z,,,false

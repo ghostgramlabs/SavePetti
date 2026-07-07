@@ -81,7 +81,9 @@ object BookmarkFileParser {
             ImportedBookmark(
                 url = url,
                 title = cell(titleIdx).ifBlank { url },
-                folder = cell(folderIdx).ifBlank { null },
+                // Raindrop writes nested folders as "Parent/Child" — the
+                // leaf is the collection the user actually filed it in.
+                folder = cell(folderIdx).substringAfterLast('/').trim().ifBlank { null },
                 tags = splitTags(cell(tagsIdx)),
                 notes = notes.ifBlank { null },
                 createdAt = parseCreated(cell(createdIdx)),
