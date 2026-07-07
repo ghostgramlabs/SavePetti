@@ -250,6 +250,25 @@ fun SettingsScreen(
             }
         }
     }
+    val importBookmarks = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                busyLabel = "Importing bookmarks"
+                runCatching { viewModel.importBookmarksUri(uri) }
+                    .onSuccess { result ->
+                        snackbarHostState.showSnackbar(bookmarkImportMessage(result))
+                    }
+                    .onFailure {
+                        snackbarHostState.showSnackbar(
+                            "Couldn't read that file. Export from your bookmark app as HTML or CSV, then try again."
+                        )
+                    }
+                busyLabel = null
+            }
+        }
+    }
     val chooseBackupFolder = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -578,6 +597,11 @@ fun SettingsScreen(
                     body = "New phone, or need to recover? In the Backup section above, tap \"Restore from backup\" and pick a backup file to bring everything back.",
                     icon = Icons.Rounded.FolderOpen
                 )
+                HelpItem(
+                    title = "Bring bookmarks from other apps",
+                    body = "Coming from Chrome, Firefox, Raindrop.io, or Pocket? Export your bookmarks there (HTML or CSV), then use \"Import bookmarks file\" below. Folders and tags carry over.",
+                    icon = Icons.Rounded.FolderOpen
+                )
                 }
             }
 
@@ -732,6 +756,45 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Restore from backup", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            SettingsSection(title = "Import from other apps") {
+                Text(
+                    "Moving from Chrome, Firefox, Raindrop.io, Pocket, or another bookmark app? " +
+                        "Export your bookmarks there as an HTML or CSV file, then bring that file in here. " +
+                        "Folders become collections, tags come along, and links you already have are skipped.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        // Same OEM guard as the backup pickers — some builds
+                        // ship without a SAF document picker.
+                        runCatching {
+                            importBookmarks.launch(
+                                arrayOf(
+                                    "text/html",
+                                    "text/csv",
+                                    "text/comma-separated-values",
+                                    "text/plain",
+                                    "*/*"
+                                )
+                            )
+                        }.onFailure {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("No file picker available on this device.")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Import bookmarks file", fontWeight = FontWeight.Bold)
                 }
             }
             // Outer NavGraph Scaffold already pads for the bottom nav, and
@@ -1259,6 +1322,20 @@ private fun backupSummaryMessage(
     }
     val extraText = if (extras.isEmpty()) "" else ", " + extras.joinToString(", ")
     return "$prefix ${result.saves} saves, ${result.embeddedFiles} files$extraText"
+}
+
+private fun bookmarkImportMessage(result: SaveRepository.BookmarkImportResult): String {
+    if (result.imported == 0) {
+        return "Nothing new to import — those links are already on your shelf"
+    }
+    val parts = buildList {
+        add("Imported ${result.imported} ${if (result.imported == 1) "link" else "links"}")
+        if (result.newCollections > 0) {
+            add("${result.newCollections} new ${if (result.newCollections == 1) "collection" else "collections"}")
+        }
+        if (result.skippedDuplicates > 0) add("${result.skippedDuplicates} already saved")
+    }
+    return parts.joinToString(", ")
 }
 
 private fun formatBackupTime(timestamp: Long): String =

@@ -16,13 +16,17 @@ import com.ghostgramlabs.pettibox.data.local.TagDao
 import com.ghostgramlabs.pettibox.data.local.TagEntity
 import com.ghostgramlabs.pettibox.data.local.TagWithCount
 import com.ghostgramlabs.pettibox.data.backup.BackupSummaryCalculator
+import com.ghostgramlabs.pettibox.data.bookmarks.ImportedBookmark
 import com.ghostgramlabs.pettibox.data.util.AttachmentStore
 import com.ghostgramlabs.pettibox.domain.model.CategoryPalette
+import com.ghostgramlabs.pettibox.domain.model.ContentType
+import com.ghostgramlabs.pettibox.domain.model.SourceApp
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
+import java.util.UUID
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
@@ -54,6 +58,12 @@ class SaveRepository @Inject constructor(
         val archived: Int,
         val tags: Int,
         val tagLinks: Int
+    )
+
+    data class BookmarkImportResult(
+        val imported: Int,
+        val skippedDuplicates: Int,
+        val newCollections: Int
     )
 
     suspend fun seedCategoriesIfEmpty() {
@@ -532,6 +542,86 @@ class SaveRepository @Inject constructor(
             tags = tagCount
         )
     }
+
+    /**
+     * Import bookmarks parsed from another app's export file (browser HTML,
+     * Raindrop/Pocket CSV, plain URL list — see
+     * [com.ghostgramlabs.pettibox.data.bookmarks.BookmarkFileParser]).
+     *
+     * Source folders map onto collections by name (case-insensitive); unknown
+     * folders become new user-editable collections. Links whose URL is
+     * already on the shelf — or repeated within the file — are skipped, so
+     * re-running an import is safe and never duplicates the library.
+     */
+    suspend fun importBookmarks(bookmarks: List<ImportedBookmark>): BookmarkImportResult =
+        database.withTransaction {
+            val existing = categoryDao.allForExport()
+            val categoriesByName = existing
+                .associateBy { it.name.trim().lowercase() }
+                .toMutableMap()
+            var maxSortOrder = existing.maxOfOrNull { it.sortOrder } ?: 0
+            var imported = 0
+            var skipped = 0
+            var newCollections = 0
+            val seenUrls = mutableSetOf<String>()
+
+            for (bookmark in bookmarks) {
+                val url = bookmark.url.trim()
+                if (!seenUrls.add(url.lowercase()) || saveDao.findByUrl(url) != null) {
+                    skipped++
+                    continue
+                }
+
+                val categoryId = bookmark.folder?.trim()?.takeIf { it.isNotBlank() }
+                    ?.let { folderName ->
+                        val key = folderName.lowercase()
+                        val category = categoriesByName.getOrPut(key) {
+                            CategoryEntity(
+                                id = "user_" + UUID.randomUUID().toString().take(8),
+                                // Same 28-char cap the collection editor enforces.
+                                name = folderName.take(28),
+                                emoji = "🔖",
+                                colorHex = CategoryPalette
+                                    .Defaults[newCollections % CategoryPalette.Defaults.size]
+                                    .colorHex,
+                                sortOrder = ++maxSortOrder,
+                                userCreated = true
+                            ).also {
+                                categoryDao.upsert(it)
+                                newCollections++
+                            }
+                        }
+                        category.id
+                    }
+
+                val now = System.currentTimeMillis()
+                val itemId = saveDao.insert(
+                    SaveItemEntity(
+                        title = bookmark.title.trim().ifBlank { url },
+                        url = url,
+                        contentType = ContentType.LINK.name,
+                        sourceApp = SourceApp.fromUrl(url).name,
+                        categoryId = categoryId,
+                        notes = bookmark.notes?.trim()?.ifBlank { null },
+                        isFavorite = bookmark.isFavorite,
+                        isArchived = bookmark.isArchived,
+                        createdAt = bookmark.createdAt ?: now,
+                        updatedAt = now
+                    )
+                )
+                for (tag in bookmark.tags) {
+                    val tagId = tagDao.upsert(tag)
+                    if (tagId > 0) tagDao.link(ItemTagCrossRef(itemId, tagId))
+                }
+                imported++
+            }
+
+            BookmarkImportResult(
+                imported = imported,
+                skippedDuplicates = skipped,
+                newCollections = newCollections
+            )
+        }
 
     // ── Attachments ───────────────────────────────────────────────────────
 

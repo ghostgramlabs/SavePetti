@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ghostgramlabs.pettibox.data.backup.LocalBackupWorker
+import com.ghostgramlabs.pettibox.data.bookmarks.BookmarkFileParser
 import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.ocr.OcrWorker
 import com.ghostgramlabs.pettibox.data.ocr.PdfTextWorker
@@ -20,9 +21,11 @@ import com.ghostgramlabs.pettibox.data.util.LocalBackupStore
 import com.ghostgramlabs.pettibox.ui.components.NewCollection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -166,10 +169,7 @@ class SettingsViewModel @Inject constructor(
     fun localBackupPath(): String = localBackupStore.backupPath()
 
     suspend fun importBackupUri(uri: Uri): SaveRepository.BackupImportResult {
-        val name = appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
-        }.orEmpty()
+        val name = displayNameOf(uri)
         val mimeType = appContext.contentResolver.getType(uri).orEmpty()
         val isZip = name.endsWith(".zip", ignoreCase = true) ||
             mimeType.equals("application/zip", ignoreCase = true) ||
@@ -182,6 +182,29 @@ class SettingsViewModel @Inject constructor(
             }
         } ?: error("Could not open backup")
     }
+
+    /**
+     * Import a bookmarks export from another app (browser/Raindrop HTML,
+     * Raindrop or Pocket CSV, plain URL list). Parsing a multi-megabyte
+     * export off the main thread keeps the Settings screen responsive.
+     */
+    suspend fun importBookmarksUri(uri: Uri): SaveRepository.BookmarkImportResult =
+        withContext(Dispatchers.Default) {
+            val name = displayNameOf(uri)
+            val content = appContext.contentResolver.openInputStream(uri)
+                ?.bufferedReader()
+                ?.use { it.readText() }
+                ?: error("Could not open file")
+            val bookmarks = BookmarkFileParser.parse(content, name)
+            if (bookmarks.isEmpty()) error("No links found in file")
+            repo.importBookmarks(bookmarks)
+        }
+
+    private fun displayNameOf(uri: Uri): String =
+        appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+        }.orEmpty()
 
     suspend fun setAutoScanOcr(enabled: Boolean) {
         ocrPreferences.setAutoScan(enabled)
