@@ -49,6 +49,15 @@ interface SaveDao {
     @Query("SELECT * FROM save_items WHERE url = :url AND is_archived = 0 AND is_pending_delete = 0 ORDER BY created_at DESC LIMIT 1")
     suspend fun findByUrl(url: String): SaveItemEntity?
 
+    /**
+     * Every row referencing the category — archived and Undo-staged rows
+     * included. This is the "is it safe to delete this collection without
+     * unfiling anything" check, so it must not share the listing queries'
+     * filters.
+     */
+    @Query("SELECT COUNT(*) FROM save_items WHERE category_id = :categoryId")
+    suspend fun countAllForCategory(categoryId: String): Int
+
     /** Intentionally unfiltered — the Detail screen needs to keep showing the row during the Undo window. */
     @Query("SELECT * FROM save_items WHERE id = :id LIMIT 1")
     fun observeById(id: Long): Flow<SaveItemEntity?>

@@ -66,6 +66,8 @@ class SaveRepository @Inject constructor(
         val newCollections: Int
     )
 
+    data class StarterSweepResult(val removed: Int, val keptWithSaves: Int)
+
     /**
      * Seed the starter collections. Runs ONCE per install (the caller
      * gates on [com.ghostgramlabs.pettibox.data.preferences.OnboardingPreferences.categoriesSeeded]).
@@ -201,6 +203,30 @@ class SaveRepository @Inject constructor(
     suspend fun upsertCategory(c: CategoryEntity) = categoryDao.upsert(c)
     suspend fun getCategory(id: String) = categoryDao.getById(id)
     suspend fun deleteCategory(id: String) = categoryDao.delete(id)
+
+    /**
+     * One-tap cleanup for users who don't want the prefilled starters.
+     * Deletes every starter (non-user-created) collection that holds no
+     * saves at all — archived and Undo-staged rows count as "holding", so
+     * nothing is ever silently unfiled. Starters with saves are kept and
+     * counted so the UI can tell the user why they stayed. Deleted
+     * starters never come back: seeding runs once per install.
+     */
+    suspend fun removeEmptyStarterCollections(): StarterSweepResult = database.withTransaction {
+        var removed = 0
+        var keptWithSaves = 0
+        categoryDao.allForExport()
+            .filter { !it.userCreated }
+            .forEach { category ->
+                if (saveDao.countAllForCategory(category.id) == 0) {
+                    categoryDao.delete(category.id)
+                    removed++
+                } else {
+                    keptWithSaves++
+                }
+            }
+        StarterSweepResult(removed = removed, keptWithSaves = keptWithSaves)
+    }
 
     suspend fun exportBackupJson(): String {
         val categories = categoryDao.allForExport()

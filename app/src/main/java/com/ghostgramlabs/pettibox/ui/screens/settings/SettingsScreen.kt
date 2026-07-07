@@ -143,6 +143,7 @@ fun SettingsScreen(
     var showCreateCollection by remember { mutableStateOf(false) }
     var editingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
     var deletingCollection by remember { mutableStateOf<CategoryEntity?>(null) }
+    var showRemoveStarters by remember { mutableStateOf(false) }
     var editingReminderTime by remember { mutableStateOf<ReminderTimeTarget?>(null) }
     var showHelpDetails by remember { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
@@ -194,6 +195,42 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { deletingCollection = null }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+
+    if (showRemoveStarters) {
+        AlertDialog(
+            onDismissRequest = { showRemoveStarters = false },
+            title = { Text("Remove starter collections?") },
+            text = {
+                Text(
+                    "Empty starter collections will be removed in one go, and they won't come back. " +
+                        "Starters that hold saves are kept so nothing loses its place — you can empty or delete those individually. " +
+                        "Collections you created yourself aren't touched."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveStarters = false
+                    scope.launch {
+                        val result = viewModel.removeEmptyStarterCollections()
+                        snackbarHostState.showSnackbar(
+                            when {
+                                result.removed == 0 && result.keptWithSaves > 0 ->
+                                    "No empty starters to remove — ${result.keptWithSaves} hold saves"
+                                result.keptWithSaves > 0 ->
+                                    "Removed ${result.removed} starter collections · ${result.keptWithSaves} kept (they hold saves)"
+                                else ->
+                                    "Removed ${result.removed} starter collections"
+                            }
+                        )
+                    }
+                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveStarters = false }) { Text("Cancel") }
             },
             shape = RoundedCornerShape(24.dp)
         )
@@ -464,6 +501,19 @@ fun SettingsScreen(
                     onCreateClick = { showCreateCollection = true },
                     onEditCollection = { editingCollection = it }
                 )
+                // One-tap cleanup for people who'd rather start from a
+                // blank grid than the prefilled starters. Only offered
+                // while starter collections still exist.
+                if (collections.any { !it.userCreated }) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { showRemoveStarters = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Remove starter collections", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))

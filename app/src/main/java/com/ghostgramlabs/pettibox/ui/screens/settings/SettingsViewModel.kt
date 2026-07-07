@@ -127,6 +127,10 @@ class SettingsViewModel @Inject constructor(
             onDone?.invoke()
         }
 
+    /** One-tap starter cleanup — see [SaveRepository.removeEmptyStarterCollections]. */
+    suspend fun removeEmptyStarterCollections(): SaveRepository.StarterSweepResult =
+        repo.removeEmptyStarterCollections()
+
     suspend fun exportBackupJson(): String = repo.exportBackupJson()
 
     suspend fun exportBackupZipFile(): Pair<File, SaveRepository.BackupExportResult> {
