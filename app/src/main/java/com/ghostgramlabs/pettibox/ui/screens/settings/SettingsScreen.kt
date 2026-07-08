@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.TouchApp
@@ -89,6 +90,7 @@ import com.ghostgramlabs.pettibox.data.preferences.ThemeMode
 import com.ghostgramlabs.pettibox.data.repository.SaveRepository
 import com.ghostgramlabs.pettibox.ui.components.CreateCollectionDialog
 import com.ghostgramlabs.pettibox.ui.components.EditCollectionDialog
+import com.ghostgramlabs.pettibox.ui.components.HelpLinks
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
 import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.ScreenHeading
@@ -786,6 +788,24 @@ fun SettingsScreen(
             SettingsSection(title = "Help") {
                 HelpFlow()
                 Spacer(Modifier.height(12.dp))
+                // The share-sheet flow is the app's core gesture and the
+                // hardest to explain in words — lead with the video.
+                OutlinedButton(
+                    onClick = {
+                        if (!HelpLinks.openShareDemo(ctx)) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Couldn't open the video — no browser on this device")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Watch: save from any app", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = { showHelpDetails = !showHelpDetails },
                     modifier = Modifier.fillMaxWidth(),

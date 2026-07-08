@@ -89,6 +89,7 @@ import com.ghostgramlabs.pettibox.data.local.CategoryEntity
 import com.ghostgramlabs.pettibox.data.local.SaveItemEntity
 import com.ghostgramlabs.pettibox.ui.components.CategoryChip
 import com.ghostgramlabs.pettibox.ui.components.EmptyState
+import com.ghostgramlabs.pettibox.ui.components.HelpLinks
 import com.ghostgramlabs.pettibox.ui.components.KeeperMascot
 import com.ghostgramlabs.pettibox.ui.components.KeeperPose
 import com.ghostgramlabs.pettibox.ui.components.QuickActionSheet
@@ -680,7 +681,8 @@ private fun HomeOnboardingDialog(
             icon = Icons.Rounded.GridView,
             title = "Share into PettiBox",
             body = "Tap Share in another app, choose PettiBox, then save it to a shelf. You can add notes, tags, or reminders when they help.",
-            tip = null
+            tip = null,
+            showDemoVideo = true
         ),
         OnboardingStep(
             icon = Icons.Rounded.Search,
@@ -704,6 +706,7 @@ private fun HomeOnboardingDialog(
         },
         title = { Text(current.title, fontWeight = FontWeight.ExtraBold) },
         text = {
+            val ctx = LocalContext.current
             Column {
                 Text(current.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (current.tip != null) {
@@ -712,6 +715,18 @@ private fun HomeOnboardingDialog(
                         current.tip,
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (current.showDemoVideo) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "▶ Watch the short demo",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { HelpLinks.openShareDemo(ctx) }
+                            .padding(vertical = 6.dp, horizontal = 2.dp)
                     )
                 }
                 Spacer(Modifier.height(14.dp))
@@ -750,7 +765,9 @@ private data class OnboardingStep(
     val icon: ImageVector,
     val title: String,
     val body: String,
-    val tip: String? = null
+    val tip: String? = null,
+    /** Offer the share-flow demo video on this step. */
+    val showDemoVideo: Boolean = false
 )
 
 @Composable
@@ -833,6 +850,17 @@ private fun FirstRunGuide(
             icon = Icons.Rounded.Share,
             title = "Use Share",
             body = "From Chrome, YouTube, Photos, Files, or another app, tap Share and choose PettiBox."
+        )
+        val ctx = LocalContext.current
+        Text(
+            "▶ Watch how it works",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = scheme.primary,
+            modifier = Modifier
+                .padding(start = 30.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { HelpLinks.openShareDemo(ctx) }
+                .padding(vertical = 6.dp, horizontal = 2.dp)
         )
         Spacer(Modifier.height(10.dp))
         GuideStep(
