@@ -9,6 +9,9 @@ Primary keyword theme: bookmark manager and link saver
 Secondary keywords:
 - read it later
 - Pocket alternative (full description only — never in title or short description)
+- import bookmarks
+- bookmark backup
+- Google Drive backup
 - save for later
 - screenshot search
 - OCR search
@@ -54,9 +57,13 @@ FIND SAVED CONTENT FAST
 
 Search titles, notes, links, sources, collections and tags. On-device OCR also makes text inside screenshots, images and PDFs searchable. Search works offline, and OCR scans can be refreshed from Settings.
 
+IMPORT FROM YOUR BROWSER OR OLD BOOKMARK APP
+
+Bring your existing library in minutes. Import bookmark files exported from Chrome, Firefox, Edge or Safari, plus HTML and CSV exports from other bookmark and read-it-later apps, including old Pocket and Raindrop.io export files. Folders become collections, tags come along, and links you already saved are skipped automatically. You can export your links as a CSV file anytime, so your library is never locked in.
+
 ORGANIZE BOOKMARKS YOUR WAY
 
-Group saved content into collections for recipes, study, work, shopping, travel or anything else. Add tags, pin important items, mark favorites and archive what you no longer need.
+Group saved content into collections for recipes, study, work, shopping, travel or anything else. Add tags, pin important items, mark favorites and archive what you no longer need. Every collection is yours to shape: rename the starters, change their emoji and color, or remove them entirely.
 
 MORE THAN A LINK SAVER
 
@@ -64,7 +71,7 @@ Keep links, notes, text, screenshots, images, PDFs, documents and other files to
 
 A READ IT LATER APP THAT CANNOT LOSE YOUR LIBRARY
 
-Looking for a Pocket alternative? PettiBox keeps your read-later library on your own device, so no service shutdown, account change or sync outage can take it away. Save articles and videos now, read or watch them later, and keep everything searchable offline.
+Looking for a Pocket alternative? PettiBox keeps your read-later library on your own device — and in your own Google Drive if you choose — so no service shutdown, account change or sync outage can take it away. If you still have your old Pocket export file, import it and pick up where you left off.
 
 REMINDERS FOR SAVED ITEMS
 
@@ -72,11 +79,11 @@ Add a reminder when you save something or schedule one later. Remember to read a
 
 PRIVATE AND OFFLINE-FIRST
 
-Your library stays on your device. No account or cloud sync is required for core features. PettiBox only uses internet access for optional link previews and remote thumbnails.
+Your library stays on your device. No account or cloud sync is required for core features. PettiBox only uses internet access for optional link previews, remote thumbnails and the optional Google Drive backup.
 
-BACKUP AND RESTORE
+BACKUP AND RESTORE, INCLUDING GOOGLE DRIVE
 
-Export a local backup containing saved items, collections, tags, notes, favorites, archived items and attachments. Restore it when you need it.
+Turn on the automatic nightly backup and PettiBox keeps fresh copies on your phone. Connect your own Google Drive and each backup is also uploaded there — saves, collections, tags, notes, attachments and searchable text included. New phone? Restore everything from Drive or from a backup file in a couple of taps. PettiBox can only see the backup files it created, never the rest of your Drive, and no PettiBox account is ever needed.
 
 Great for saving:
 
@@ -92,7 +99,7 @@ Great for saving:
 
 PettiBox is a private bookmark manager, read it later app, link saver and screenshot organizer built to help you save now and find later.
 
-Character count: 2571 / 4000
+Character count: 3511 / 4000
 
 ## ASO Diagnosis And Launch Plan
 
@@ -121,12 +128,15 @@ After publishing the revised metadata:
 
 - Save links, notes, images, screenshots, PDFs, documents and files.
 - Save from the Android share menu or add items inside the app.
+- Import bookmarks from browser and bookmark-app export files (HTML, CSV).
+- Export your links as a portable CSV file.
 - Search titles, notes, links, sources, tags and OCR text.
 - On-device OCR for images and PDFs, with adjustable PDF scan limits.
-- Organize saves with collections, colors, tags, favorites and pins.
+- Organize saves with collections, colors, tags, favorites and pins — starters are fully editable and removable.
 - Add reminders to saved items.
 - Archive items before permanent deletion.
-- Export and restore local backups with attachments.
+- Automatic nightly backup with optional upload to your own Google Drive.
+- Restore your whole shelf from Drive or a backup file on a new phone.
 - Link previews and YouTube thumbnail previews.
 - Offline-first design with no login required.
 
@@ -136,10 +146,11 @@ After publishing the revised metadata:
 2. Pick a collection and add tags before saving.
 3. Search titles, notes, tags and text inside screenshots.
 4. Browse colorful collections for work, study, recipes and travel.
-5. Pin favorites and revisit important saves faster.
-6. Add reminders for things you want to come back to.
-7. Export a private backup and restore your shelf anytime.
-8. Keep your saves on your device, with no account required.
+5. Import your old bookmarks in minutes — folders and tags carry over.
+6. Pin favorites and revisit important saves faster.
+7. Add reminders for things you want to come back to.
+8. Nightly backups on your phone and in your own Google Drive.
+9. Keep your saves on your device, with no account required.
 
 ## Promo Text Options
 
@@ -151,7 +162,8 @@ One private shelf for links, screenshots, notes, PDFs and files.
 
 - Do not say the app never uses internet. The app declares INTERNET for link metadata and remote preview images.
 - Do not imply official integrations with Instagram, Reddit, YouTube, WhatsApp, TikTok, X or other brands. PettiBox accepts shared content from apps that support Android sharing.
-- Pocket may be named in the full description only, and only as a comparison ("Pocket alternative"). Never put a competitor brand in the app title, short description or screenshots — that violates Play metadata policy.
+- Pocket may be named in the full description only, and only as a comparison ("Pocket alternative") or factual import compatibility ("import your old Pocket export file"). The same applies to Raindrop.io. Never put a competitor brand in the app title, short description or screenshots — that violates Play metadata policy.
+- Say "your own Google Drive", never wording that implies PettiBox runs a cloud service or that Google endorses the app. The Drive upload is user-initiated, to the user's account, using the files-only (drive.file) permission.
 - Do not promise perfect OCR for every language or every PDF. The current in-app wording says English works best and other languages may be partial.
 - Do not mention subscriptions or ads unless the release build and store setup confirm the final monetization state.
 
@@ -161,10 +173,13 @@ Implementation-supported claims:
 - Android share target for text, images, PDFs, generic files, multiple images and selected text.
 - Local Room database with FTS search.
 - On-device ML Kit OCR for images and rasterized PDF pages.
-- Collections, colors, tags, favorites, pins, archive state and reminders.
+- Collections, colors, tags, favorites, pins, archive state and reminders; starter collections are renameable and deletable, with a one-tap sweep for empty starters.
+- Bookmark import from Netscape HTML (all major browsers, Raindrop, Instapaper, Pinboard, Linkwarden, Karakeep), Raindrop CSV, Pocket CSV and plain URL lists; duplicate URLs skipped; folders map to collections.
+- CSV export of every save with a URL (title, url, folder, tags, note, created, favorite, status).
 - Link metadata fetching with YouTube thumbnail fallback.
-- Manual backup export and restore, including attachments.
-- Automatic local safety-copy flow in Settings.
+- Manual backup export and restore, including attachments; restores onto a non-empty library ask for confirmation.
+- Automatic nightly local safety-copy flow in Settings, with optional SAF folder copy.
+- Optional Google Drive backup and restore via AuthorizationClient with the drive.file scope (app-created files only); 3 rolling copies in a "PettiBox Backups" folder.
 
 Permissions to explain if needed:
 - Internet: optional link previews and remote thumbnails.
@@ -177,3 +192,16 @@ Data safety positioning:
 - Saved content is stored locally on device.
 - Link preview fetching may contact the linked website when saving URLs.
 - Backup files are user-controlled exports.
+- Google Drive backup is optional and opt-in: backups upload to the user's own Drive under the drive.file scope (the app can only access files it created). No data is sent to the developer; disconnecting stops uploads and leaves existing copies in the user's Drive.
+
+## Release Notes (What's New) — 2.0.4
+
+Keep under Play's 500-character limit:
+
+```
+NEW: Import your bookmarks from Chrome, Firefox and other bookmark apps (HTML/CSV) — folders and tags carry over, duplicates are skipped.
+NEW: Automatic backup to your own Google Drive, and one-tap restore on a new phone.
+NEW: Export your links as a CSV file anytime.
+Starter collections can now be renamed, restyled or removed.
+Clearer backup settings, safer restores, and bug fixes.
+```
