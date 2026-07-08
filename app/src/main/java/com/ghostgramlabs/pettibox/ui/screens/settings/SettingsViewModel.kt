@@ -187,20 +187,21 @@ class SettingsViewModel @Inject constructor(
 
     fun localBackupPath(): String = localBackupStore.backupPath()
 
-    suspend fun importBackupUri(uri: Uri): SaveRepository.BackupImportResult {
-        val name = displayNameOf(uri)
-        val mimeType = appContext.contentResolver.getType(uri).orEmpty()
-        val isZip = name.endsWith(".zip", ignoreCase = true) ||
-            mimeType.equals("application/zip", ignoreCase = true) ||
-            mimeType.equals("application/x-zip-compressed", ignoreCase = true)
-        return appContext.contentResolver.openInputStream(uri)?.use { input ->
-            if (isZip) {
-                repo.importBackupZip(input)
-            } else {
-                repo.importBackupJson(input.bufferedReader().use { it.readText() })
-            }
-        } ?: error("Could not open backup")
-    }
+    suspend fun importBackupUri(uri: Uri): SaveRepository.BackupImportResult =
+        withContext(Dispatchers.IO) {
+            val name = displayNameOf(uri)
+            val mimeType = appContext.contentResolver.getType(uri).orEmpty()
+            val isZip = name.endsWith(".zip", ignoreCase = true) ||
+                mimeType.equals("application/zip", ignoreCase = true) ||
+                mimeType.equals("application/x-zip-compressed", ignoreCase = true)
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                if (isZip) {
+                    repo.importBackupZip(input)
+                } else {
+                    repo.importBackupJson(input.bufferedReader().use { it.readText() })
+                }
+            } ?: error("Could not open backup")
+        }
 
     /**
      * Import a bookmarks export from another app (browser/Raindrop HTML,
@@ -279,11 +280,15 @@ class SettingsViewModel @Inject constructor(
     suspend fun listDriveBackups(): List<DriveBackupFile>? =
         driveBackupManager.listBackups()
 
-    suspend fun restoreFromDrive(fileId: String): SaveRepository.BackupImportResult {
-        val stream = driveBackupManager.openBackupStream(fileId)
-            ?: error("Drive access needs reconnecting")
-        return stream.use { repo.importBackupZip(it) }
-    }
+    suspend fun restoreFromDrive(fileId: String): SaveRepository.BackupImportResult =
+        // The zip is unpacked straight off the network stream — reading it on
+        // the main dispatcher trips NetworkOnMainThreadException and the
+        // restore dies with a generic "couldn't restore" snackbar.
+        withContext(Dispatchers.IO) {
+            val stream = driveBackupManager.openBackupStream(fileId)
+                ?: error("Drive access needs reconnecting")
+            stream.use { repo.importBackupZip(it) }
+        }
 
     private fun displayNameOf(uri: Uri): String =
         appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->

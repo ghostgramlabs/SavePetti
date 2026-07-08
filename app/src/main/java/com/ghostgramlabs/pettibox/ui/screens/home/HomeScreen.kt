@@ -403,7 +403,10 @@ fun HomeScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            if (!state.isLoading && state.totalCount > 0) {
+            // Visible on an empty shelf too — hiding the only manual-add
+            // entry point exactly when a new user is looking for it was
+            // backwards. Only the initial load hides it, to avoid a flash.
+            if (!state.isLoading) {
                 // Squircle shape is SHARED across both themes (same geometry
                 // rule as the nav dock) so they match. Only the lift differs as
                 // per-mode treatment: a flat 3 dp paper-cut in light, the
@@ -453,7 +456,11 @@ fun HomeScreen(
                     // True fresh install \u2014 show the 3-step guide + the
                     // share-into-PettiBox explainer below.
                     FirstRunGuide(
-                        onAddNote = openQuickNote,
+                        // Opens the full add chooser (note / link / paste /
+                        // image / file) \u2014 not the bare quick-note editor,
+                        // which nudged first-time users into creating an
+                        // empty note as their first "save".
+                        onAdd = { showChooser = true },
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     Spacer(Modifier.height(10.dp))
@@ -805,7 +812,7 @@ private fun IndexingStatusChip(modifier: Modifier = Modifier) {
 
 @Composable
 private fun FirstRunGuide(
-    onAddNote: () -> Unit,
+    onAdd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -844,7 +851,7 @@ private fun FirstRunGuide(
             modifier = Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(scheme.primary)
-                .clickable(onClick = onAddNote)
+                .clickable(onClick = onAdd)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
